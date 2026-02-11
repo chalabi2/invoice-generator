@@ -1,4 +1,3 @@
-import * as React from "react"
 import { createRootRoute, createRoute, createRouter, Outlet } from "@tanstack/react-router"
 
 import { InvoiceEditorPage, InvoiceLibraryPage, InvoicePreviewPage } from "@/routes/InvoicePage"

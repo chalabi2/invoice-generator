@@ -1,11 +1,6 @@
 name = "invoicegenerator-xyz"
 compatibility_date = "2026-02-10"
-
-[pages]
 pages_build_output_dir = "dist"
-
-[site]
-bucket = "dist"
 
 [vars]
 SITE_URL = "https://invoicegenerator.xyz"
