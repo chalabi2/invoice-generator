@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+:root {
+  --background: 210 24% 98%;
+  --foreground: 210 20% 12%;
+  --card: 210 24% 99%;
+  --card-foreground: 210 20% 12%;
+  --popover: 210 24% 99%;
+  --popover-foreground: 210 20% 12%;
+  --primary: 190 85% 45%;
+  --primary-foreground: 200 90% 98%;
+  --secondary: 200 40% 92%;
+  --secondary-foreground: 210 25% 18%;
+  --muted: 210 22% 94%;
+  --muted-foreground: 210 12% 40%;
+  --accent: 195 75% 90%;
+  --accent-foreground: 210 25% 18%;
+  --destructive: 0 72% 50%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 210 16% 86%;
+  --input: 210 16% 86%;
+  --ring: 190 85% 45%;
+
+  --radius: 12px;
+}
+
+.theme-dark {
+  --background: 210 18% 8%;
+  --foreground: 210 24% 96%;
+  --card: 210 18% 10%;
+  --card-foreground: 210 24% 96%;
+  --popover: 210 18% 10%;
+  --popover-foreground: 210 24% 96%;
+  --primary: 190 85% 55%;
+  --primary-foreground: 210 25% 12%;
+  --secondary: 210 18% 16%;
+  --secondary-foreground: 200 35% 92%;
+  --muted: 210 14% 18%;
+  --muted-foreground: 210 16% 62%;
+  --accent: 190 45% 26%;
+  --accent-foreground: 200 35% 96%;
+  --destructive: 0 62% 46%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 210 16% 20%;
+  --input: 210 16% 20%;
+  --ring: 190 85% 55%;
+}
+
+
+* {
+  border-color: hsl(var(--border));
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: "Sora", "Space Grotesk", "Segoe UI", sans-serif;
+  text-rendering: optimizeLegibility;
+}
+
+@media screen {
+  .print-only {
+    display: none;
+  }
+}
+
+@media print {
+  body {
+    background: #ffffff;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
