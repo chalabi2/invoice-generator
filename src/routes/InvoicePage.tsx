@@ -1285,7 +1285,7 @@ export function InvoiceEditorPage() {
                           meta: { ...data.meta, issueDate: value },
                         }))
                       }
-                      placeholder="Select date"
+                      placeholder="dd/mm/yy"
                     />
                   </Field>
                   <Field
@@ -1300,7 +1300,7 @@ export function InvoiceEditorPage() {
                           meta: { ...data.meta, paymentDate: value },
                         }))
                       }
-                      placeholder="Select date"
+                      placeholder="dd/mm/yy"
                     />
                   </Field>
                   <Field
@@ -1315,7 +1315,7 @@ export function InvoiceEditorPage() {
                           meta: { ...data.meta, dueDate: value },
                         }))
                       }
-                      placeholder="Select date"
+                      placeholder="dd/mm/yy"
                     />
                   </Field>
                   <Field
@@ -1823,6 +1823,53 @@ export function InvoiceEditorPage() {
                 </CardHeader>
                 <CardContent className="grid gap-6 sm:grid-cols-2">
                   <div className="space-y-2">
+                    <Label className="text-xs text-[hsl(var(--muted-foreground))]">Logo size</Label>
+                    <Select
+                      value={activeInvoice.style.logoSize}
+                      onValueChange={(value) =>
+                        updateInvoice((data) => ({
+                          ...data,
+                          style: {
+                            ...data.style,
+                            logoSize: value as "small" | "medium" | "large",
+                          },
+                        }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Logo size" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="small">Small</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="large">Large</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-[hsl(var(--muted-foreground))]">Logo placement</Label>
+                    <Select
+                      value={activeInvoice.style.logoPlacement}
+                      onValueChange={(value) =>
+                        updateInvoice((data) => ({
+                          ...data,
+                          style: {
+                            ...data.style,
+                            logoPlacement: value as "tucked" | "prominent",
+                          },
+                        }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Logo placement" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="tucked">Tucked</SelectItem>
+                        <SelectItem value="prominent">Prominent</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label className="text-xs text-[hsl(var(--muted-foreground))]">
                         Invoice theme
@@ -2155,130 +2202,144 @@ export function InvoiceLibraryPage() {
                 New invoice
               </Button>
             </div>
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-              <Input
-                placeholder="New folder name"
-                value={newFolderName}
-                onChange={(event) => setNewFolderName(event.target.value)}
-              />
-              <Button variant="outline" onClick={addFolder}>
-                Add folder
-              </Button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant={selectedFolderId === "all" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setSelectedFolderId("all")}
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={handleDrop(null)}
-                onDragEnter={() => setDragOverFolderId("all")}
-                onDragLeave={() => setDragOverFolderId(null)}
-                className={cn(
-                  dragOverFolderId === "all" && "ring-2 ring-[hsl(var(--primary))]"
-                )}
-              >
-                All
-              </Button>
-              <Button
-                variant={selectedFolderId === "unfiled" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setSelectedFolderId("unfiled")}
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={handleDrop(null)}
-                onDragEnter={() => setDragOverFolderId("unfiled")}
-                onDragLeave={() => setDragOverFolderId(null)}
-                className={cn(
-                  dragOverFolderId === "unfiled" && "ring-2 ring-[hsl(var(--primary))]"
-                )}
-              >
-                Unfiled
-              </Button>
-              {folders.map((folder) => (
-                <div key={folder.id} className="flex items-center gap-2">
+            <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-xs text-[hsl(var(--muted-foreground))]">Folders</Label>
+                  <div className="grid gap-2">
+                    <Input
+                      placeholder="New folder name"
+                      value={newFolderName}
+                      onChange={(event) => setNewFolderName(event.target.value)}
+                    />
+                    <Button variant="outline" onClick={addFolder}>
+                      Add folder
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-2">
                   <Button
-                    variant={selectedFolderId === folder.id ? "default" : "outline"}
+                    variant={selectedFolderId === "all" ? "default" : "outline"}
                     size="sm"
-                    onClick={() => setSelectedFolderId(folder.id)}
+                    onClick={() => setSelectedFolderId("all")}
                     onDragOver={(event) => event.preventDefault()}
-                    onDrop={handleDrop(folder.id)}
-                    onDragEnter={() => setDragOverFolderId(folder.id)}
+                    onDrop={handleDrop(null)}
+                    onDragEnter={() => setDragOverFolderId("all")}
                     onDragLeave={() => setDragOverFolderId(null)}
                     className={cn(
-                      dragOverFolderId === folder.id &&
+                      "w-full justify-start",
+                      dragOverFolderId === "all" && "ring-2 ring-[hsl(var(--primary))]"
+                    )}
+                  >
+                    All invoices
+                  </Button>
+                  <Button
+                    variant={selectedFolderId === "unfiled" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setSelectedFolderId("unfiled")}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={handleDrop(null)}
+                    onDragEnter={() => setDragOverFolderId("unfiled")}
+                    onDragLeave={() => setDragOverFolderId(null)}
+                    className={cn(
+                      "w-full justify-start",
+                      dragOverFolderId === "unfiled" &&
                         "ring-2 ring-[hsl(var(--primary))]"
                     )}
                   >
-                    {folder.name}
+                    Unfiled
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setFolderToDelete(folder)}
-                  >
-                    Delete
-                  </Button>
-                </div>
-              ))}
-            </div>
-            <div className="max-h-[calc(100vh-360px)] min-h-[200px] space-y-2 overflow-auto">
-              {visibleInvoices.map((invoice) => {
-                const isActive = invoice.id === store.activeInvoiceId;
-                return (
-                  <div
-                    key={invoice.id}
-                    draggable
-                    onDragStart={startDrag(invoice.id)}
-                    className={cn(
-                      "flex flex-col gap-3 rounded-xl border border-[hsl(var(--border))] p-4 transition",
-                      isActive && "bg-[hsl(var(--muted))]"
-                    )}
-                  >
-                    <div className="flex items-center justify-between gap-4">
-                      <div>
-                        <p className="text-sm font-semibold">
-                          {invoice.invoiceNumber || "Draft invoice"}
-                        </p>
-                        <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                          {invoice.clientName || "Untitled client"} ·{" "}
-                          {formatTimestamp(invoice.updatedAt)}
-                        </p>
-                      </div>
-                      {isActive ? (
-                        <span className="rounded-full bg-[hsl(var(--primary))]/10 px-3 py-1 text-xs font-semibold text-[hsl(var(--primary))]">
-                          Active
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="flex flex-wrap gap-2">
+                  {folders.map((folder) => (
+                    <div key={folder.id} className="flex items-center gap-2">
                       <Button
-                        variant="outline"
+                        variant={selectedFolderId === folder.id ? "default" : "outline"}
                         size="sm"
-                        onClick={() => setActiveInvoice(invoice.id)}
-                        asChild
+                        onClick={() => setSelectedFolderId(folder.id)}
+                        onDragOver={(event) => event.preventDefault()}
+                        onDrop={handleDrop(folder.id)}
+                        onDragEnter={() => setDragOverFolderId(folder.id)}
+                        onDragLeave={() => setDragOverFolderId(null)}
+                        className={cn(
+                          "w-full justify-start",
+                          dragOverFolderId === folder.id &&
+                            "ring-2 ring-[hsl(var(--primary))]"
+                        )}
                       >
-                        <Link to="/edit">Open</Link>
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() =>
-                          exportToPdf(invoice.id, setActiveInvoice, "invoice-export")
-                        }
-                      >
-                        Export PDF
+                        {folder.name}
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => deleteInvoice(invoice.id)}
+                        onClick={() => setFolderToDelete(folder)}
                       >
                         Delete
                       </Button>
                     </div>
-                  </div>
-                );
-              })}
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-3">
+                <Label className="text-xs text-[hsl(var(--muted-foreground))]">Invoices</Label>
+                <div className="max-h-[calc(100vh-320px)] min-h-[260px] space-y-2 overflow-auto">
+                  {visibleInvoices.map((invoice) => {
+                    const isActive = invoice.id === store.activeInvoiceId;
+                    return (
+                      <div
+                        key={invoice.id}
+                        draggable
+                        onDragStart={startDrag(invoice.id)}
+                        className={cn(
+                          "flex flex-col gap-3 rounded-xl border border-[hsl(var(--border))] p-4 transition",
+                          isActive && "bg-[hsl(var(--muted))]"
+                        )}
+                      >
+                        <div className="flex items-center justify-between gap-4">
+                          <div>
+                            <p className="text-sm font-semibold">
+                              {invoice.invoiceNumber || "Draft invoice"}
+                            </p>
+                            <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                              {invoice.clientName || "Untitled client"} ·{" "}
+                              {formatTimestamp(invoice.updatedAt)}
+                            </p>
+                          </div>
+                          {isActive ? (
+                            <span className="rounded-full bg-[hsl(var(--primary))]/10 px-3 py-1 text-xs font-semibold text-[hsl(var(--primary))]">
+                              Active
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setActiveInvoice(invoice.id)}
+                            asChild
+                          >
+                            <Link to="/edit">Open</Link>
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() =>
+                              exportToPdf(invoice.id, setActiveInvoice, "invoice-export")
+                            }
+                          >
+                            Export PDF
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => deleteInvoice(invoice.id)}
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
             <Dialog open={Boolean(folderToDelete)} onOpenChange={() => setFolderToDelete(null)}>
               <DialogContent>
@@ -2474,6 +2535,13 @@ const InvoicePreview = ({
           totalsBox: "border rounded-xl",
         };
 
+  const logoSizeClass =
+    invoice.style.logoSize === "large"
+      ? "h-20"
+      : invoice.style.logoSize === "small"
+      ? "h-10"
+      : "h-14";
+
   return (
     <div
       className={cn(
@@ -2522,11 +2590,11 @@ const InvoicePreview = ({
               />
             </p>
           </div>
-          {invoice.logoData ? (
+          {invoice.logoData && invoice.style.logoPlacement === "tucked" ? (
             <img
               src={invoice.logoData}
               alt="Invoice logo"
-              className="h-12 w-auto max-w-[180px] rounded-md bg-white/70 p-2 object-contain sm:h-14"
+              className={cn("w-auto object-contain", logoSizeClass, "max-w-[220px]")}
             />
           ) : null}
         </div>
@@ -2534,6 +2602,13 @@ const InvoicePreview = ({
 
       <div className="grid gap-6 sm:grid-cols-2">
         <div className="space-y-2">
+          {invoice.logoData && invoice.style.logoPlacement === "prominent" ? (
+            <img
+              src={invoice.logoData}
+              alt="Invoice logo"
+              className={cn("mb-3 w-auto object-contain", logoSizeClass, "max-w-[260px]")}
+            />
+          ) : null}
           <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: palette.muted }}>
             <InlineEditableText
               value={invoice.labels.from}
