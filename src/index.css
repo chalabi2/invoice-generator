@@ -86,3 +86,33 @@ textarea,
 select {
   font: inherit;
 }
+
+button,
+input,
+textarea,
+select {
+  cursor: text;
+}
+
+button {
+  cursor: pointer;
+}
+
+input[type="date"] {
+  color-scheme: light;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  border-radius: 0.5rem;
+}
+
+.theme-dark input[type="date"] {
+  color-scheme: dark;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.2);
+}
+
+.theme-dark input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.8);
+}

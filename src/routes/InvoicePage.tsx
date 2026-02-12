@@ -3,7 +3,8 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { nanoid } from "nanoid";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
-import { Link2Off, Moon, Sun } from "lucide-react";
+import { Calendar as CalendarIcon, Link2Off, Moon, Sun } from "lucide-react";
+import { format, isValid, parse } from "date-fns";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -39,6 +40,16 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useLocalStorageState } from "@/hooks/useLocalStorageState";
 import { cn } from "@/lib/utils";
 
@@ -86,6 +97,8 @@ type InvoiceStyle = {
   headerColor: string;
   backgroundColor: string;
   useCustomColors: boolean;
+  logoSize: "small" | "medium" | "large";
+  logoPlacement: "tucked" | "prominent";
 };
 
 type InvoiceData = {
@@ -143,15 +156,30 @@ type StoredInvoice = {
   clientName: string;
   invoiceNumber: string;
   updatedAt: string;
+  folderId: string | null;
   data: InvoiceData;
+};
+
+type InvoiceFolder = {
+  id: string;
+  name: string;
+  createdAt: string;
 };
 
 type StoreState = {
   invoices: StoredInvoice[];
+  folders: InvoiceFolder[];
   activeInvoiceId: string | null;
   settings: {
     uiTheme: ThemeOption;
   };
+};
+
+const getDefaultUiTheme = (): ThemeOption => {
+  if (typeof window === "undefined") return "light";
+  return window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
 };
 
 const STORAGE_KEY = "invoice-generator:v1";
@@ -223,6 +251,8 @@ const createEmptyInvoice = (): InvoiceData => {
       headerColor: "#06B6D4",
       backgroundColor: "#FFFFFF",
       useCustomColors: false,
+      logoSize: "medium",
+      logoPlacement: "tucked",
     },
     preferences: {
       invoiceTheme: "light",
@@ -283,13 +313,15 @@ const createInitialStore = (): StoreState => {
     clientName: invoice.client.name,
     invoiceNumber: invoice.meta.invoiceNumber,
     updatedAt: invoice.updatedAt,
+    folderId: null,
     data: invoice,
   };
   return {
     invoices: [stored],
+    folders: [],
     activeInvoiceId: stored.id,
     settings: {
-      uiTheme: "light",
+      uiTheme: getDefaultUiTheme(),
     },
   };
 };
@@ -544,6 +576,8 @@ const useInvoiceStore = () => {
       headerColor: base.style?.headerColor ?? "#06B6D4",
       backgroundColor: base.style?.backgroundColor ?? "#FFFFFF",
       useCustomColors: base.style?.useCustomColors ?? false,
+      logoSize: base.style?.logoSize ?? "medium",
+      logoPlacement: base.style?.logoPlacement ?? "tucked",
     };
 
     const mergedPreferences = {
@@ -620,6 +654,7 @@ const useInvoiceStore = () => {
       clientName: fresh.client.name,
       invoiceNumber: fresh.meta.invoiceNumber,
       updatedAt: fresh.updatedAt,
+      folderId: null,
       data: fresh,
     };
     setStore((current) => ({
@@ -729,6 +764,7 @@ const InvoiceShell = ({
   exportPreview: React.ReactNode;
   activeInvoice: InvoiceData;
 }) => {
+  const [isSupportOpen, setIsSupportOpen] = React.useState(false);
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
@@ -756,7 +792,7 @@ const InvoiceShell = ({
               <div>
                 <p className="text-lg font-semibold">invoicegenerator.xyz</p>
                 <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                  Free, open invoice generator
+                  Free invoice generator
                 </p>
               </div>
             </div>
@@ -868,6 +904,39 @@ const InvoiceShell = ({
           {exportPreview}
         </div>
       </div>
+      <Dialog open={isSupportOpen} onOpenChange={setIsSupportOpen}>
+        <DialogTrigger asChild>
+          <button
+            type="button"
+            className="no-print fixed bottom-6 right-6 inline-flex h-12 w-12 items-center justify-center rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-lg shadow-lg transition hover:bg-[hsl(var(--muted))]"
+            aria-label="Support this project"
+          >
+            ❤️
+          </button>
+        </DialogTrigger>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Support this project</DialogTitle>
+            <DialogDescription className="space-y-3 text-sm">
+              <p>
+                This website is inspired by invoice-generator.com. After using it for years, I was
+                disappointed to find it riddled with ads.
+              </p>
+              <p>
+                My commitment is to pay to host this out of pocket and never collect ad revenue or
+                payments from users of any kind, as long as it remains useful to myself or anyone else.
+              </p>
+              <p>
+                Any donations would be very helpful. Currently, the domain is $1.20 per month and hosting
+                is free, but if usage increases, costs will go up as well. Thank you!
+              </p>
+            </DialogDescription>
+            <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))] px-4 py-3 text-left text-sm">
+              Wallet: <span className="font-mono">0xc17510C86bE51FB1ba32FbD6ab2bD7a83A4A89dE</span>
+            </div>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
@@ -901,6 +970,42 @@ export function InvoiceEditorPage() {
       ...data,
       labels: { ...data.labels, [key]: value || defaultLabels[key] },
     }));
+  };
+
+  const DatePickerField = ({
+    value,
+    onChange,
+    placeholder,
+  }: {
+    value: string;
+    onChange: (value: string) => void;
+    placeholder: string;
+  }) => {
+    const parsed = value ? parse(value, "yyyy-MM-dd", new Date()) : undefined;
+    const selected = parsed && isValid(parsed) ? parsed : undefined;
+
+    return (
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            data-empty={!selected}
+            className="w-full justify-start text-left font-normal data-[empty=true]:text-[hsl(var(--muted-foreground))]"
+          >
+            <CalendarIcon className="mr-2 h-4 w-4" />
+            {selected ? format(selected, "dd/MM/yy") : <span>{placeholder}</span>}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-auto p-0">
+          <Calendar
+            mode="single"
+            selected={selected}
+            onSelect={(date) => onChange(date ? format(date, "yyyy-MM-dd") : "")}
+            initialFocus
+          />
+        </PopoverContent>
+      </Popover>
+    );
   };
 
   const onExport = () =>
@@ -1172,48 +1277,45 @@ export function InvoiceEditorPage() {
                     label={activeInvoice.labels.issueDate}
                     onLabelChange={(value) => updateLabel("issueDate", value)}
                   >
-                    <Input
-                      type="date"
+                    <DatePickerField
                       value={activeInvoice.meta.issueDate}
-                      onChange={(event) =>
+                      onChange={(value) =>
                         updateInvoice((data) => ({
                           ...data,
-                          meta: { ...data.meta, issueDate: event.target.value },
+                          meta: { ...data.meta, issueDate: value },
                         }))
                       }
+                      placeholder="Select date"
                     />
                   </Field>
                   <Field
                     label={activeInvoice.labels.paymentDate}
                     onLabelChange={(value) => updateLabel("paymentDate", value)}
                   >
-                    <Input
-                      type="date"
+                    <DatePickerField
                       value={activeInvoice.meta.paymentDate}
-                      onChange={(event) =>
+                      onChange={(value) =>
                         updateInvoice((data) => ({
                           ...data,
-                          meta: {
-                            ...data.meta,
-                            paymentDate: event.target.value,
-                          },
+                          meta: { ...data.meta, paymentDate: value },
                         }))
                       }
+                      placeholder="Select date"
                     />
                   </Field>
                   <Field
                     label={activeInvoice.labels.dueDate}
                     onLabelChange={(value) => updateLabel("dueDate", value)}
                   >
-                    <Input
-                      type="date"
+                    <DatePickerField
                       value={activeInvoice.meta.dueDate}
-                      onChange={(event) =>
+                      onChange={(value) =>
                         updateInvoice((data) => ({
                           ...data,
-                          meta: { ...data.meta, dueDate: event.target.value },
+                          meta: { ...data.meta, dueDate: value },
                         }))
                       }
+                      placeholder="Select date"
                     />
                   </Field>
                   <Field
@@ -1880,8 +1982,14 @@ export function InvoiceEditorPage() {
 }
 
 export function InvoicePreviewPage() {
-  const { store, setStore, activeInvoice, invoiceTheme, setActiveInvoice } =
-    useInvoiceStore();
+  const {
+    store,
+    setStore,
+    activeInvoice,
+    invoiceTheme,
+    setActiveInvoice,
+    updateInvoice,
+  } = useInvoiceStore();
   const onExport = () =>
     exportToPdf(
       store.activeInvoiceId ?? undefined,
@@ -1913,6 +2021,7 @@ export function InvoicePreviewPage() {
             currency={activeInvoice.preferences.currency}
             template={activeInvoice.preferences.template}
             theme={invoiceTheme}
+            onUpdate={updateInvoice}
           />
         </div>
       </div>
@@ -1930,6 +2039,10 @@ export function InvoiceLibraryPage() {
     addInvoice,
     deleteInvoice,
   } = useInvoiceStore();
+  const [selectedFolderId, setSelectedFolderId] = React.useState<string>("all");
+  const [newFolderName, setNewFolderName] = React.useState("");
+  const [folderToDelete, setFolderToDelete] = React.useState<InvoiceFolder | null>(null);
+  const [dragOverFolderId, setDragOverFolderId] = React.useState<string | null>(null);
 
   const onExport = () =>
     exportToPdf(
@@ -1937,6 +2050,59 @@ export function InvoiceLibraryPage() {
       setActiveInvoice,
       "invoice-export"
     );
+
+  const folders = store.folders ?? [];
+  const visibleInvoices = store.invoices.filter((invoice) => {
+    if (selectedFolderId === "all") return true;
+    if (selectedFolderId === "unfiled") return !invoice.folderId;
+    return invoice.folderId === selectedFolderId;
+  });
+
+  const addFolder = () => {
+    const trimmed = newFolderName.trim();
+    if (!trimmed) return;
+    const folder: InvoiceFolder = {
+      id: nanoid(),
+      name: trimmed,
+      createdAt: new Date().toISOString(),
+    };
+    setStore((current) => ({
+      ...current,
+      folders: [...(current.folders ?? []), folder],
+    }));
+    setNewFolderName("");
+  };
+
+  const removeFolder = (folderId: string) => {
+    setStore((current) => ({
+      ...current,
+      folders: (current.folders ?? []).filter((folder) => folder.id !== folderId),
+      invoices: current.invoices.map((invoice) =>
+        invoice.folderId === folderId ? { ...invoice, folderId: null } : invoice
+      ),
+    }));
+    if (selectedFolderId === folderId) {
+      setSelectedFolderId("all");
+    }
+  };
+
+  const handleDrop = (folderId: string | null) => (event: React.DragEvent) => {
+    event.preventDefault();
+    const invoiceId = event.dataTransfer.getData("text/plain");
+    if (!invoiceId) return;
+    setStore((current) => ({
+      ...current,
+      invoices: current.invoices.map((invoice) =>
+        invoice.id === invoiceId ? { ...invoice, folderId } : invoice
+      ),
+    }));
+    setDragOverFolderId(null);
+  };
+
+  const startDrag = (invoiceId: string) => (event: React.DragEvent) => {
+    event.dataTransfer.setData("text/plain", invoiceId);
+    event.dataTransfer.effectAllowed = "move";
+  };
 
   return (
     <InvoiceShell
@@ -1959,7 +2125,7 @@ export function InvoiceLibraryPage() {
         <Card>
           <CardHeader>
             <CardTitle>Invoice Library</CardTitle>
-            <CardDescription>Manage saved invoices like files.</CardDescription>
+            <CardDescription>Manage saved invoices.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1989,12 +2155,80 @@ export function InvoiceLibraryPage() {
                 New invoice
               </Button>
             </div>
-            <div className="max-h-[520px] space-y-2 overflow-auto">
-              {store.invoices.map((invoice) => {
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+              <Input
+                placeholder="New folder name"
+                value={newFolderName}
+                onChange={(event) => setNewFolderName(event.target.value)}
+              />
+              <Button variant="outline" onClick={addFolder}>
+                Add folder
+              </Button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant={selectedFolderId === "all" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSelectedFolderId("all")}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={handleDrop(null)}
+                onDragEnter={() => setDragOverFolderId("all")}
+                onDragLeave={() => setDragOverFolderId(null)}
+                className={cn(
+                  dragOverFolderId === "all" && "ring-2 ring-[hsl(var(--primary))]"
+                )}
+              >
+                All
+              </Button>
+              <Button
+                variant={selectedFolderId === "unfiled" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSelectedFolderId("unfiled")}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={handleDrop(null)}
+                onDragEnter={() => setDragOverFolderId("unfiled")}
+                onDragLeave={() => setDragOverFolderId(null)}
+                className={cn(
+                  dragOverFolderId === "unfiled" && "ring-2 ring-[hsl(var(--primary))]"
+                )}
+              >
+                Unfiled
+              </Button>
+              {folders.map((folder) => (
+                <div key={folder.id} className="flex items-center gap-2">
+                  <Button
+                    variant={selectedFolderId === folder.id ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setSelectedFolderId(folder.id)}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={handleDrop(folder.id)}
+                    onDragEnter={() => setDragOverFolderId(folder.id)}
+                    onDragLeave={() => setDragOverFolderId(null)}
+                    className={cn(
+                      dragOverFolderId === folder.id &&
+                        "ring-2 ring-[hsl(var(--primary))]"
+                    )}
+                  >
+                    {folder.name}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setFolderToDelete(folder)}
+                  >
+                    Delete
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <div className="max-h-[calc(100vh-360px)] min-h-[200px] space-y-2 overflow-auto">
+              {visibleInvoices.map((invoice) => {
                 const isActive = invoice.id === store.activeInvoiceId;
                 return (
                   <div
                     key={invoice.id}
+                    draggable
+                    onDragStart={startDrag(invoice.id)}
                     className={cn(
                       "flex flex-col gap-3 rounded-xl border border-[hsl(var(--border))] p-4 transition",
                       isActive && "bg-[hsl(var(--muted))]"
@@ -2046,6 +2280,32 @@ export function InvoiceLibraryPage() {
                 );
               })}
             </div>
+            <Dialog open={Boolean(folderToDelete)} onOpenChange={() => setFolderToDelete(null)}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Delete folder?</DialogTitle>
+                  <DialogDescription>
+                    This will remove the folder and move its invoices back to Unfiled.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setFolderToDelete(null)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={() => {
+                      if (folderToDelete) {
+                        removeFolder(folderToDelete.id);
+                        setFolderToDelete(null);
+                      }
+                    }}
+                  >
+                    Delete folder
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
           </CardContent>
         </Card>
       </div>
@@ -2053,28 +2313,125 @@ export function InvoiceLibraryPage() {
   );
 }
 
+const InlineEditableText = ({
+  value,
+  onChange,
+  className,
+  multiline = false,
+  placeholder = "",
+}: {
+  value: string;
+  onChange?: (value: string) => void;
+  className?: string;
+  multiline?: boolean;
+  placeholder?: string;
+}) => {
+  const [editing, setEditing] = React.useState(false);
+  const [draft, setDraft] = React.useState(value);
+
+  React.useEffect(() => {
+    if (!editing) {
+      setDraft(value);
+    }
+  }, [value, editing]);
+
+  const commit = () => {
+    if (!onChange) return;
+    onChange(draft);
+    setEditing(false);
+  };
+
+  const displayValue = value || placeholder || "—";
+
+  if (!onChange) {
+    return <span className={className}>{displayValue}</span>;
+  }
+
+  if (editing) {
+    if (multiline) {
+      return (
+        <textarea
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={commit}
+          className={cn(
+            "min-h-[72px] w-full resize-none rounded-md border border-[hsl(var(--border))] bg-transparent p-2 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]",
+            className
+          )}
+          autoFocus
+        />
+      );
+    }
+
+    return (
+      <input
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            commit();
+          }
+        }}
+        className={cn(
+          "w-full rounded-md border border-[hsl(var(--border))] bg-transparent p-1 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]",
+          className
+        )}
+        autoFocus
+      />
+    );
+  }
+
+  if (!value) {
+    return (
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        className={cn(
+          "h-4 w-full cursor-text text-left text-[hsl(var(--muted-foreground))]",
+          className
+        )}
+        aria-label="Edit field"
+      >
+        {displayValue}
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => setEditing(true)}
+      className={cn("cursor-text text-left", className)}
+    >
+      {displayValue}
+    </button>
+  );
+};
+
 const InvoicePreview = ({
   invoice,
   currency,
   template,
   theme,
   exportMode = false,
+  onUpdate,
 }: {
   invoice: InvoiceData;
   currency: string;
   template: TemplateOption;
   theme: ThemeOption;
   exportMode?: boolean;
+  onUpdate?: (updater: (data: InvoiceData) => InvoiceData) => void;
 }) => {
   const totals = getTotals(invoice);
+  const canEdit = Boolean(onUpdate) && !exportMode;
   const themePalette = getThemePalette(theme);
   const palette = getInvoicePalette(
     invoice.style.useCustomColors
       ? invoice.style.backgroundColor
       : themePalette.background,
-    invoice.style.useCustomColors
-      ? invoice.style.headerColor
-      : themePalette.header
+    invoice.style.useCustomColors ? invoice.style.headerColor : themePalette.header
   );
 
   const wrapperStyle: React.CSSProperties = {
@@ -2123,9 +2480,7 @@ const InvoicePreview = ({
         "w-full space-y-6 border p-6",
         templateStyles.body,
         exportMode ? "rounded-none border-0" : "rounded-2xl",
-        template === "minimal" &&
-          !exportMode &&
-          "border-transparent shadow-none"
+        template === "minimal" && !exportMode && "border-transparent shadow-none"
       )}
       style={wrapperStyle}
     >
@@ -2135,9 +2490,36 @@ const InvoicePreview = ({
       >
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.3em]">Invoice</p>
+            <p className="text-xs uppercase tracking-[0.3em]">
+              <InlineEditableText
+                value={invoice.labels.invoiceNumber}
+                placeholder="Invoice"
+                onChange={
+                  canEdit
+                    ? (value) =>
+                        onUpdate?.((data) => ({
+                          ...data,
+                          labels: { ...data.labels, invoiceNumber: value },
+                        }))
+                    : undefined
+                }
+              />
+            </p>
             <p className="text-2xl font-semibold">
-              {invoice.meta.invoiceNumber || "Draft"}
+              <InlineEditableText
+                value={invoice.meta.invoiceNumber}
+                placeholder="Draft"
+                onChange={
+                  canEdit
+                    ? (value) =>
+                        onUpdate?.((data) => ({
+                          ...data,
+                          meta: { ...data.meta, invoiceNumber: value },
+                        }))
+                    : undefined
+                }
+                className="font-semibold"
+              />
             </p>
           </div>
           {invoice.logoData ? (
@@ -2152,36 +2534,200 @@ const InvoicePreview = ({
 
       <div className="grid gap-6 sm:grid-cols-2">
         <div className="space-y-2">
-          <p
-            className="text-xs font-semibold uppercase tracking-wide"
-            style={{ color: palette.muted }}
-          >
-            {invoice.labels.from}
+          <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: palette.muted }}>
+            <InlineEditableText
+              value={invoice.labels.from}
+              onChange={
+                canEdit
+                  ? (value) =>
+                      onUpdate?.((data) => ({
+                        ...data,
+                        labels: { ...data.labels, from: value },
+                      }))
+                  : undefined
+              }
+            />
           </p>
-          <p className="font-semibold">{invoice.from.name}</p>
-          <p>{invoice.from.email}</p>
-          <p>{invoice.from.phone}</p>
+          <p className="font-semibold">
+            <InlineEditableText
+              value={invoice.from.name}
+              placeholder="Business name"
+              onChange={
+                canEdit
+                  ? (value) =>
+                      onUpdate?.((data) => ({
+                        ...data,
+                        from: { ...data.from, name: value },
+                      }))
+                  : undefined
+              }
+            />
+          </p>
+          <p>
+            <InlineEditableText
+              value={invoice.from.email}
+              placeholder="Email"
+              onChange={
+                canEdit
+                  ? (value) =>
+                      onUpdate?.((data) => ({
+                        ...data,
+                        from: { ...data.from, email: value },
+                      }))
+                  : undefined
+              }
+            />
+          </p>
+          <p>
+            <InlineEditableText
+              value={invoice.from.phone}
+              placeholder="Phone"
+              onChange={
+                canEdit
+                  ? (value) =>
+                      onUpdate?.((data) => ({
+                        ...data,
+                        from: { ...data.from, phone: value },
+                      }))
+                  : undefined
+              }
+            />
+          </p>
           <p className="whitespace-pre-line" style={{ color: palette.muted }}>
-            {invoice.from.address}
+            <InlineEditableText
+              value={invoice.from.address}
+              placeholder="Address"
+              multiline
+              onChange={
+                canEdit
+                  ? (value) =>
+                      onUpdate?.((data) => ({
+                        ...data,
+                        from: { ...data.from, address: value },
+                      }))
+                  : undefined
+              }
+              className="whitespace-pre-line"
+            />
           </p>
         </div>
         <div className="space-y-2">
-          <p
-            className="text-xs font-semibold uppercase tracking-wide"
-            style={{ color: palette.muted }}
-          >
-            {invoice.labels.billTo}
+          <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: palette.muted }}>
+            <InlineEditableText
+              value={invoice.labels.billTo}
+              onChange={
+                canEdit
+                  ? (value) =>
+                      onUpdate?.((data) => ({
+                        ...data,
+                        labels: { ...data.labels, billTo: value },
+                      }))
+                  : undefined
+              }
+            />
           </p>
-          <p className="font-semibold">{invoice.client.name}</p>
-          <p>{invoice.client.email}</p>
+          <p className="font-semibold">
+            <InlineEditableText
+              value={invoice.client.name}
+              placeholder="Client name"
+              onChange={
+                canEdit
+                  ? (value) =>
+                      onUpdate?.((data) => ({
+                        ...data,
+                        client: { ...data.client, name: value },
+                      }))
+                  : undefined
+              }
+            />
+          </p>
+          <p>
+            <InlineEditableText
+              value={invoice.client.email}
+              placeholder="Client email"
+              onChange={
+                canEdit
+                  ? (value) =>
+                      onUpdate?.((data) => ({
+                        ...data,
+                        client: { ...data.client, email: value },
+                      }))
+                  : undefined
+              }
+            />
+          </p>
           <p className="whitespace-pre-line" style={{ color: palette.muted }}>
-            {invoice.client.address}
+            <InlineEditableText
+              value={invoice.client.address}
+              placeholder="Client address"
+              multiline
+              onChange={
+                canEdit
+                  ? (value) =>
+                      onUpdate?.((data) => ({
+                        ...data,
+                        client: { ...data.client, address: value },
+                      }))
+                  : undefined
+              }
+              className="whitespace-pre-line"
+            />
           </p>
           <p style={{ color: palette.muted }}>
-            {invoice.labels.attnTo}: {invoice.client.attnTo}
+            <InlineEditableText
+              value={invoice.labels.attnTo}
+              onChange={
+                canEdit
+                  ? (value) =>
+                      onUpdate?.((data) => ({
+                        ...data,
+                        labels: { ...data.labels, attnTo: value },
+                      }))
+                  : undefined
+              }
+            />
+            :{" "}
+            <InlineEditableText
+              value={invoice.client.attnTo}
+              placeholder="Attn"
+              onChange={
+                canEdit
+                  ? (value) =>
+                      onUpdate?.((data) => ({
+                        ...data,
+                        client: { ...data.client, attnTo: value },
+                      }))
+                  : undefined
+              }
+            />
           </p>
           <p style={{ color: palette.muted }}>
-            {invoice.labels.shipTo}: {invoice.client.shipTo}
+            <InlineEditableText
+              value={invoice.labels.shipTo}
+              onChange={
+                canEdit
+                  ? (value) =>
+                      onUpdate?.((data) => ({
+                        ...data,
+                        labels: { ...data.labels, shipTo: value },
+                      }))
+                  : undefined
+              }
+            />
+            :{" "}
+            <InlineEditableText
+              value={invoice.client.shipTo}
+              placeholder="Ship to"
+              onChange={
+                canEdit
+                  ? (value) =>
+                      onUpdate?.((data) => ({
+                        ...data,
+                        client: { ...data.client, shipTo: value },
+                      }))
+                  : undefined
+              }
+            />
           </p>
         </div>
       </div>
@@ -2190,49 +2736,159 @@ const InvoicePreview = ({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <p
-            className="text-xs uppercase tracking-wide"
-            style={{ color: palette.muted }}
-          >
-            {invoice.labels.issueDate}
+          <p className="text-xs uppercase tracking-wide" style={{ color: palette.muted }}>
+            <InlineEditableText
+              value={invoice.labels.issueDate}
+              onChange={
+                canEdit
+                  ? (value) =>
+                      onUpdate?.((data) => ({
+                        ...data,
+                        labels: { ...data.labels, issueDate: value },
+                      }))
+                  : undefined
+              }
+            />
           </p>
-          <p>{invoice.meta.issueDate || "-"}</p>
+          <p>
+            <InlineEditableText
+              value={invoice.meta.issueDate}
+              placeholder="-"
+              onChange={
+                canEdit
+                  ? (value) =>
+                      onUpdate?.((data) => ({
+                        ...data,
+                        meta: { ...data.meta, issueDate: value },
+                      }))
+                  : undefined
+              }
+            />
+          </p>
         </div>
         <div>
-          <p
-            className="text-xs uppercase tracking-wide"
-            style={{ color: palette.muted }}
-          >
-            {invoice.labels.paymentTerms}
+          <p className="text-xs uppercase tracking-wide" style={{ color: palette.muted }}>
+            <InlineEditableText
+              value={invoice.labels.paymentTerms}
+              onChange={
+                canEdit
+                  ? (value) =>
+                      onUpdate?.((data) => ({
+                        ...data,
+                        labels: { ...data.labels, paymentTerms: value },
+                      }))
+                  : undefined
+              }
+            />
           </p>
-          <p>{invoice.meta.paymentTerms || "-"}</p>
+          <p>
+            <InlineEditableText
+              value={invoice.meta.paymentTerms}
+              placeholder="-"
+              onChange={
+                canEdit
+                  ? (value) =>
+                      onUpdate?.((data) => ({
+                        ...data,
+                        meta: { ...data.meta, paymentTerms: value },
+                      }))
+                  : undefined
+              }
+            />
+          </p>
         </div>
         <div>
-          <p
-            className="text-xs uppercase tracking-wide"
-            style={{ color: palette.muted }}
-          >
-            {invoice.labels.paymentDate}
+          <p className="text-xs uppercase tracking-wide" style={{ color: palette.muted }}>
+            <InlineEditableText
+              value={invoice.labels.paymentDate}
+              onChange={
+                canEdit
+                  ? (value) =>
+                      onUpdate?.((data) => ({
+                        ...data,
+                        labels: { ...data.labels, paymentDate: value },
+                      }))
+                  : undefined
+              }
+            />
           </p>
-          <p>{invoice.meta.paymentDate || "-"}</p>
+          <p>
+            <InlineEditableText
+              value={invoice.meta.paymentDate}
+              placeholder="-"
+              onChange={
+                canEdit
+                  ? (value) =>
+                      onUpdate?.((data) => ({
+                        ...data,
+                        meta: { ...data.meta, paymentDate: value },
+                      }))
+                  : undefined
+              }
+            />
+          </p>
         </div>
         <div>
-          <p
-            className="text-xs uppercase tracking-wide"
-            style={{ color: palette.muted }}
-          >
-            {invoice.labels.dueDate}
+          <p className="text-xs uppercase tracking-wide" style={{ color: palette.muted }}>
+            <InlineEditableText
+              value={invoice.labels.dueDate}
+              onChange={
+                canEdit
+                  ? (value) =>
+                      onUpdate?.((data) => ({
+                        ...data,
+                        labels: { ...data.labels, dueDate: value },
+                      }))
+                  : undefined
+              }
+            />
           </p>
-          <p>{invoice.meta.dueDate || "-"}</p>
+          <p>
+            <InlineEditableText
+              value={invoice.meta.dueDate}
+              placeholder="-"
+              onChange={
+                canEdit
+                  ? (value) =>
+                      onUpdate?.((data) => ({
+                        ...data,
+                        meta: { ...data.meta, dueDate: value },
+                      }))
+                  : undefined
+              }
+            />
+          </p>
         </div>
         <div>
-          <p
-            className="text-xs uppercase tracking-wide"
-            style={{ color: palette.muted }}
-          >
-            {invoice.labels.poNumber}
+          <p className="text-xs uppercase tracking-wide" style={{ color: palette.muted }}>
+            <InlineEditableText
+              value={invoice.labels.poNumber}
+              onChange={
+                canEdit
+                  ? (value) =>
+                      onUpdate?.((data) => ({
+                        ...data,
+                        labels: { ...data.labels, poNumber: value },
+                      }))
+                  : undefined
+              }
+            />
           </p>
-          <p>{invoice.meta.poNumber || "-"}</p>
+          <p>
+            <InlineEditableText
+              value={invoice.meta.poNumber}
+              placeholder="-"
+              onChange={
+                canEdit
+                  ? (value) =>
+                      onUpdate?.((data) => ({
+                        ...data,
+                        meta: { ...data.meta, poNumber: value },
+                      }))
+                  : undefined
+              }
+            />
+          </p>
         </div>
       </div>
 
@@ -2253,10 +2909,62 @@ const InvoicePreview = ({
               template === "modern" ? palette.mutedBg : "transparent",
           }}
         >
-          <span>{invoice.labels.item}</span>
-          <span>{invoice.labels.quantity}</span>
-          <span>{invoice.labels.rate}</span>
-          <span className="text-right">{invoice.labels.total}</span>
+          <span>
+            <InlineEditableText
+              value={invoice.labels.item}
+              onChange={
+                canEdit
+                  ? (value) =>
+                      onUpdate?.((data) => ({
+                        ...data,
+                        labels: { ...data.labels, item: value },
+                      }))
+                  : undefined
+              }
+            />
+          </span>
+          <span>
+            <InlineEditableText
+              value={invoice.labels.quantity}
+              onChange={
+                canEdit
+                  ? (value) =>
+                      onUpdate?.((data) => ({
+                        ...data,
+                        labels: { ...data.labels, quantity: value },
+                      }))
+                  : undefined
+              }
+            />
+          </span>
+          <span>
+            <InlineEditableText
+              value={invoice.labels.rate}
+              onChange={
+                canEdit
+                  ? (value) =>
+                      onUpdate?.((data) => ({
+                        ...data,
+                        labels: { ...data.labels, rate: value },
+                      }))
+                  : undefined
+              }
+            />
+          </span>
+          <span className="text-right">
+            <InlineEditableText
+              value={invoice.labels.total}
+              onChange={
+                canEdit
+                  ? (value) =>
+                      onUpdate?.((data) => ({
+                        ...data,
+                        labels: { ...data.labels, total: value },
+                      }))
+                  : undefined
+              }
+            />
+          </span>
         </div>
         {invoice.items.map((item) => {
           const amount = parseAmount(item.quantity) * parseAmount(item.rate);
@@ -2267,15 +2975,77 @@ const InvoicePreview = ({
               style={{ borderColor: palette.border }}
             >
               <div>
-                <p className="font-medium">{item.name || "Item"}</p>
-                {item.description ? (
-                  <p className="text-xs" style={{ color: palette.muted }}>
-                    {item.description}
-                  </p>
-                ) : null}
+                <p className="font-medium">
+                  <InlineEditableText
+                    value={item.name}
+                    placeholder="Item"
+                    onChange={
+                      canEdit
+                        ? (value) =>
+                            onUpdate?.((data) => ({
+                              ...data,
+                              items: data.items.map((entry) =>
+                                entry.id === item.id ? { ...entry, name: value } : entry
+                              ),
+                            }))
+                        : undefined
+                    }
+                  />
+                </p>
+                <p className="text-xs" style={{ color: palette.muted }}>
+                  <InlineEditableText
+                    value={item.description}
+                    placeholder="Description"
+                    onChange={
+                      canEdit
+                        ? (value) =>
+                            onUpdate?.((data) => ({
+                              ...data,
+                              items: data.items.map((entry) =>
+                                entry.id === item.id
+                                  ? { ...entry, description: value }
+                                  : entry
+                              ),
+                            }))
+                        : undefined
+                    }
+                  />
+                </p>
               </div>
-              <p>{item.quantity || "0"}</p>
-              <p>{item.rate || "0"}</p>
+              <p>
+                <InlineEditableText
+                  value={item.quantity}
+                  placeholder="0"
+                  onChange={
+                    canEdit
+                      ? (value) =>
+                          onUpdate?.((data) => ({
+                            ...data,
+                            items: data.items.map((entry) =>
+                              entry.id === item.id ? { ...entry, quantity: value } : entry
+                            ),
+                          }))
+                      : undefined
+                  }
+                />
+              </p>
+              <p>
+                <InlineEditableText
+                  value={item.rate}
+                  placeholder="0"
+                  onChange={
+                    canEdit
+                      ? (value) =>
+                          onUpdate?.((data) => ({
+                            ...data,
+                            items: data.items.map((entry) =>
+                              entry.id === item.id ? { ...entry, rate: value } : entry
+                            ),
+                          }))
+                      : undefined
+                  }
+                />
+              </p>
               <p className="text-right">{formatCurrency(amount, currency)}</p>
             </div>
           );
@@ -2285,25 +3055,69 @@ const InvoicePreview = ({
       <div className="grid gap-6 sm:grid-cols-[minmax(0,1fr)_240px]">
         <div className="space-y-4">
           <div>
-            <p
-              className="text-xs font-semibold uppercase tracking-wide"
-              style={{ color: palette.muted }}
-            >
-              {invoice.labels.notes}
+            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: palette.muted }}>
+              <InlineEditableText
+                value={invoice.labels.notes}
+                onChange={
+                  canEdit
+                    ? (value) =>
+                        onUpdate?.((data) => ({
+                          ...data,
+                          labels: { ...data.labels, notes: value },
+                        }))
+                    : undefined
+                }
+              />
             </p>
             <p className="whitespace-pre-line" style={{ color: palette.muted }}>
-              {invoice.notes || "-"}
+              <InlineEditableText
+                value={invoice.notes}
+                placeholder="-"
+                multiline
+                onChange={
+                  canEdit
+                    ? (value) =>
+                        onUpdate?.((data) => ({
+                          ...data,
+                          notes: value,
+                        }))
+                    : undefined
+                }
+                className="whitespace-pre-line"
+              />
             </p>
           </div>
           <div>
-            <p
-              className="text-xs font-semibold uppercase tracking-wide"
-              style={{ color: palette.muted }}
-            >
-              {invoice.labels.terms}
+            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: palette.muted }}>
+              <InlineEditableText
+                value={invoice.labels.terms}
+                onChange={
+                  canEdit
+                    ? (value) =>
+                        onUpdate?.((data) => ({
+                          ...data,
+                          labels: { ...data.labels, terms: value },
+                        }))
+                    : undefined
+                }
+              />
             </p>
             <p className="whitespace-pre-line" style={{ color: palette.muted }}>
-              {invoice.terms || "-"}
+              <InlineEditableText
+                value={invoice.terms}
+                placeholder="-"
+                multiline
+                onChange={
+                  canEdit
+                    ? (value) =>
+                        onUpdate?.((data) => ({
+                          ...data,
+                          terms: value,
+                        }))
+                    : undefined
+                }
+                className="whitespace-pre-line"
+              />
             </p>
           </div>
         </div>
@@ -2316,58 +3130,129 @@ const InvoicePreview = ({
           style={{ borderColor: palette.border }}
         >
           <div className="flex items-center justify-between">
-            <span
-              className="text-xs uppercase tracking-wide"
-              style={{ color: palette.muted }}
-            >
-              {invoice.labels.subtotal}
+            <span className="text-xs uppercase tracking-wide" style={{ color: palette.muted }}>
+              <InlineEditableText
+                value={invoice.labels.subtotal}
+                onChange={
+                  canEdit
+                    ? (value) =>
+                        onUpdate?.((data) => ({
+                          ...data,
+                          labels: { ...data.labels, subtotal: value },
+                        }))
+                    : undefined
+                }
+              />
             </span>
             <span>{formatCurrency(totals.subtotal, currency)}</span>
           </div>
           {invoice.totals.taxEnabled ? (
             <div className="flex items-center justify-between">
-              <span
-                className="text-xs uppercase tracking-wide"
-                style={{ color: palette.muted }}
-              >
-                {invoice.labels.tax}
+              <span className="text-xs uppercase tracking-wide" style={{ color: palette.muted }}>
+                <InlineEditableText
+                  value={invoice.labels.tax}
+                  onChange={
+                    canEdit
+                      ? (value) =>
+                          onUpdate?.((data) => ({
+                            ...data,
+                            labels: { ...data.labels, tax: value },
+                          }))
+                      : undefined
+                  }
+                />
               </span>
               <span>{formatCurrency(totals.tax, currency)}</span>
             </div>
           ) : null}
           {invoice.totals.discountEnabled ? (
             <div className="flex items-center justify-between">
-              <span
-                className="text-xs uppercase tracking-wide"
-                style={{ color: palette.muted }}
-              >
-                {invoice.labels.discount}
+              <span className="text-xs uppercase tracking-wide" style={{ color: palette.muted }}>
+                <InlineEditableText
+                  value={invoice.labels.discount}
+                  onChange={
+                    canEdit
+                      ? (value) =>
+                          onUpdate?.((data) => ({
+                            ...data,
+                            labels: { ...data.labels, discount: value },
+                          }))
+                      : undefined
+                  }
+                />
               </span>
               <span>-{formatCurrency(totals.discount, currency)}</span>
             </div>
           ) : null}
           {invoice.totals.shippingEnabled ? (
             <div className="flex items-center justify-between">
-              <span
-                className="text-xs uppercase tracking-wide"
-                style={{ color: palette.muted }}
-              >
-                {invoice.labels.shipping}
+              <span className="text-xs uppercase tracking-wide" style={{ color: palette.muted }}>
+                <InlineEditableText
+                  value={invoice.labels.shipping}
+                  onChange={
+                    canEdit
+                      ? (value) =>
+                          onUpdate?.((data) => ({
+                            ...data,
+                            labels: { ...data.labels, shipping: value },
+                          }))
+                      : undefined
+                  }
+                />
               </span>
               <span>{formatCurrency(totals.shipping, currency)}</span>
             </div>
           ) : null}
           <Separator className="bg-[color:var(--invoice-border)]" />
           <div className="flex items-center justify-between text-base font-semibold">
-            <span>{invoice.labels.total}</span>
+            <span>
+              <InlineEditableText
+                value={invoice.labels.total}
+                onChange={
+                  canEdit
+                    ? (value) =>
+                        onUpdate?.((data) => ({
+                          ...data,
+                          labels: { ...data.labels, total: value },
+                        }))
+                    : undefined
+                }
+              />
+            </span>
             <span>{formatCurrency(totals.total, currency)}</span>
           </div>
           <div className="flex items-center justify-between text-sm">
-            <span>{invoice.labels.amountPaid}</span>
+            <span>
+              <InlineEditableText
+                value={invoice.labels.amountPaid}
+                onChange={
+                  canEdit
+                    ? (value) =>
+                        onUpdate?.((data) => ({
+                          ...data,
+                          labels: { ...data.labels, amountPaid: value },
+                        }))
+                    : undefined
+                }
+              />
+            </span>
             <span>{formatCurrency(totals.amountPaid, currency)}</span>
           </div>
           <div className="flex items-center justify-between text-sm font-semibold">
-            <span>{invoice.labels.amountDue}</span>
+            <span>
+              <InlineEditableText
+                value={invoice.labels.amountDue}
+                onChange={
+                  canEdit
+                    ? (value) =>
+                        onUpdate?.((data) => ({
+                          ...data,
+                          labels: { ...data.labels, amountDue: value },
+                        }))
+                    : undefined
+                }
+              />
+            </span>
             <span>{formatCurrency(totals.amountDue, currency)}</span>
           </div>
         </div>
