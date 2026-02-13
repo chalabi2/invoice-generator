@@ -3,7 +3,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { nanoid } from "nanoid";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
-import { CalendarDays, Link2Off, Moon, Sun } from "lucide-react";
+import { CalendarDays, Link2Off, Moon, Sun, Upload } from "lucide-react";
 import { format, isValid, parse } from "date-fns";
 
 import { Button } from "@/components/ui/button";
@@ -335,6 +335,47 @@ const parseAmount = (value: string) => {
   return Number.isFinite(number) ? number : 0;
 };
 
+const normalizeLogoValue = (value: string) => value.trim();
+
+const resolveLogoSource = (value: string) => {
+  const normalized = normalizeLogoValue(value);
+  if (!normalized) return "";
+  if (
+    normalized.startsWith("data:") ||
+    normalized.startsWith("blob:") ||
+    normalized.startsWith("http://") ||
+    normalized.startsWith("https://") ||
+    normalized.startsWith("/") ||
+    normalized.startsWith("./") ||
+    normalized.startsWith("../")
+  ) {
+    return normalized;
+  }
+  if (/^[\w.-]+\.[A-Za-z]{2,}(?:[/:?#]|$)/.test(normalized)) {
+    return `https://${normalized}`;
+  }
+  return normalized;
+};
+
+const abbreviateFileName = (name: string, maxLength = 20) => {
+  if (name.length <= maxLength) return name;
+  const lastDot = name.lastIndexOf(".");
+  const hasExtension = lastDot > 0 && lastDot < name.length - 1;
+  if (!hasExtension) {
+    return `${name.slice(0, maxLength - 3)}...`;
+  }
+
+  const extension = name.slice(lastDot);
+  const baseName = name.slice(0, lastDot);
+  const availableBaseLength = maxLength - extension.length - 3;
+
+  if (availableBaseLength <= 4) {
+    return `${name.slice(0, maxLength - 3)}...`;
+  }
+
+  return `${baseName.slice(0, availableBaseLength)}...${extension}`;
+};
+
 const formatCurrency = (value: number, currency: string) => {
   return new Intl.NumberFormat(undefined, {
     style: "currency",
@@ -443,6 +484,7 @@ const getInvoicePalette = (background: string, header: string) => {
     border,
     mutedBg,
     header: normalizeHex(header),
+    headerOverlay: rgba(headerRgb, 0.25),
     headerForeground,
     headerShadow: rgba(headerRgb, 0.32),
     backgroundShadow: rgba(bgRgb, 0.12),
@@ -961,9 +1003,26 @@ export function InvoiceEditorPage() {
   } = useInvoiceStore();
 
   const totals = React.useMemo(() => getTotals(activeInvoice), [activeInvoice]);
+  const logoUploadInputRef = React.useRef<HTMLInputElement | null>(null);
+  const [logoFileName, setLogoFileName] = React.useState("");
+  const hasUploadedLogo = normalizeLogoValue(activeInvoice.logoData).startsWith(
+    "data:"
+  );
+  const uploadButtonLabel = logoFileName
+    ? abbreviateFileName(logoFileName)
+    : hasUploadedLogo
+    ? "Change logo"
+    : "Upload logo";
+
+  React.useEffect(() => {
+    if (!normalizeLogoValue(activeInvoice.logoData).startsWith("data:")) {
+      setLogoFileName("");
+    }
+  }, [activeInvoice.logoData]);
 
   const handleLogoUpload = (file: File | null) => {
     if (!file) return;
+    setLogoFileName(file.name);
     const reader = new FileReader();
     reader.onload = () => {
       updateInvoice((data) => ({
@@ -1093,24 +1152,46 @@ export function InvoiceEditorPage() {
                           <Input
                             placeholder="Paste logo URL"
                             value={
-                              activeInvoice.logoData.startsWith("data:")
+                              normalizeLogoValue(activeInvoice.logoData).startsWith(
+                                "data:"
+                              )
                                 ? ""
                                 : activeInvoice.logoData
                             }
                             onChange={(event) =>
                               updateInvoice((data) => ({
                                 ...data,
-                                logoData: event.target.value,
+                                logoData: resolveLogoSource(event.target.value),
                               }))
                             }
                           />
-                          <Input
+                          <input
+                            ref={logoUploadInputRef}
                             type="file"
                             accept="image/*"
+                            className="hidden"
                             onChange={(event) =>
                               handleLogoUpload(event.target.files?.[0] ?? null)
                             }
                           />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="justify-self-start"
+                            onClick={() => logoUploadInputRef.current?.click()}
+                            title={logoFileName || undefined}
+                          >
+                            <Upload className="h-4 w-4" />
+                            {uploadButtonLabel}
+                          </Button>
+                          <p className="text-xs text-[hsl(var(--muted-foreground))] sm:col-span-2">
+                            {logoFileName ||
+                              (normalizeLogoValue(activeInvoice.logoData).startsWith(
+                                "data:"
+                              )
+                                ? "Uploaded image selected"
+                                : "PNG, JPG, SVG, WEBP")}
+                          </p>
                         </div>
                       </Field>
                       <Field
@@ -2548,20 +2629,14 @@ const InvoicePreview = ({
     color: palette.foreground,
     borderColor: palette.border,
     fontFamily: invoice.style.font,
-    boxShadow:
-      template === "modern"
-        ? `0 28px 60px ${palette.backgroundShadow}`
-        : undefined,
-    borderRadius: exportMode ? 0 : undefined,
     minHeight: exportMode ? 1056 : undefined,
     boxSizing: "border-box",
     padding: exportMode ? "32px" : undefined,
   };
 
   const headerStyle: React.CSSProperties = {
-    backgroundColor: palette.header,
+    backgroundColor: palette.headerOverlay,
     color: palette.headerForeground,
-    boxShadow: `0 12px 40px ${palette.headerShadow}`,
   };
 
   const templateStyles =
@@ -2569,40 +2644,50 @@ const InvoicePreview = ({
       ? {
           body: "text-base",
           tableHeader: "bg-transparent border-b",
-          totalsBox: "border rounded-lg",
+          totalsBox: "border rounded-none",
+          wrapperRadius: "rounded-none",
+          headerRadius: "rounded-none",
+          tableRadius: "rounded-none",
         }
       : template === "minimal"
       ? {
           body: "text-sm",
           tableHeader: "bg-transparent border-b-0",
           totalsBox: "border-0 rounded-none",
+          wrapperRadius: "rounded-none",
+          headerRadius: "rounded-none",
+          tableRadius: "rounded-none",
         }
       : {
           body: "text-sm",
           tableHeader: "bg-[hsl(var(--muted))]",
           totalsBox: "border rounded-xl",
+          wrapperRadius: exportMode ? "rounded-none" : "rounded-2xl",
+          headerRadius: "rounded-xl",
+          tableRadius: "rounded-xl",
         };
 
   const logoSizeClass =
     invoice.style.logoSize === "large"
-      ? "h-20"
+      ? "h-[6.5rem]"
       : invoice.style.logoSize === "small"
-      ? "h-10"
-      : "h-14";
+      ? "h-14"
+      : "h-20";
+  const logoSource = resolveLogoSource(invoice.logoData);
 
   return (
     <div
       className={cn(
         "w-full space-y-6 border p-6",
         templateStyles.body,
-        exportMode ? "rounded-none border-0" : "rounded-2xl",
+        templateStyles.wrapperRadius,
         template === "minimal" &&
           !exportMode &&
           "border-transparent shadow-none"
       )}
       style={wrapperStyle}
     >
-      <div className="rounded-none p-4" style={headerStyle}>
+      <div className={cn("p-4", templateStyles.headerRadius)} style={headerStyle}>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.3em]">
@@ -2637,9 +2722,9 @@ const InvoicePreview = ({
               />
             </p>
           </div>
-          {invoice.logoData && invoice.style.logoPlacement === "tucked" ? (
+          {logoSource && invoice.style.logoPlacement === "tucked" ? (
             <img
-              src={invoice.logoData}
+              src={logoSource}
               alt="Invoice logo"
               className={cn(
                 "w-auto object-contain",
@@ -2653,9 +2738,9 @@ const InvoicePreview = ({
 
       <div className="grid gap-6 sm:grid-cols-2">
         <div className="space-y-2">
-          {invoice.logoData && invoice.style.logoPlacement === "prominent" ? (
+          {logoSource && invoice.style.logoPlacement === "prominent" ? (
             <img
-              src={invoice.logoData}
+              src={logoSource}
               alt="Invoice logo"
               className={cn(
                 "mb-3 w-auto object-contain",
@@ -3044,10 +3129,7 @@ const InvoicePreview = ({
       </div>
 
       <div
-        className={cn(
-          "overflow-hidden rounded-xl border",
-          exportMode ? "rounded-none" : "rounded-xl"
-        )}
+        className={cn("overflow-hidden border", templateStyles.tableRadius)}
         style={{ borderColor: palette.border }}
       >
         <div
@@ -3285,11 +3367,7 @@ const InvoicePreview = ({
           </div>
         </div>
         <div
-          className={cn(
-            "space-y-2 p-4",
-            templateStyles.totalsBox,
-            exportMode && "rounded-none"
-          )}
+          className={cn("space-y-2 p-4", templateStyles.totalsBox)}
           style={{ borderColor: palette.border }}
         >
           <div className="flex items-center justify-between">
