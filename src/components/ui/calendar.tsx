@@ -1,5 +1,6 @@
 import * as React from "react"
 import { DayPicker } from "react-day-picker"
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
 
@@ -11,42 +12,74 @@ function Calendar({
   showOutsideDays = true,
   ...props
 }: CalendarProps) {
+  const isDropdownLayout =
+    props.captionLayout === "dropdown" ||
+    props.captionLayout === "dropdown-months" ||
+    props.captionLayout === "dropdown-years"
+
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
       className={cn("p-3", className)}
       classNames={{
-        months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
+        months: "flex flex-col sm:flex-row gap-4",
         month: "space-y-4",
-        caption: "flex justify-center pt-1 relative items-center",
-        caption_label: "text-sm font-medium",
-        nav: "space-x-1 flex items-center",
-        nav_button: cn(
-          buttonVariants({ variant: "outline" }),
-          "h-7 w-7 bg-transparent p-0 opacity-70 hover:opacity-100"
-        ),
-        nav_button_previous: "absolute left-1",
-        nav_button_next: "absolute right-1",
-        table: "w-full border-collapse space-y-1",
-        head_row: "flex",
-        head_cell:
-          "text-[hsl(var(--muted-foreground))] rounded-md w-9 font-normal text-[0.8rem]",
-        row: "flex w-full mt-2",
-        cell: "h-9 w-9 text-center text-sm p-0 relative",
-        day: cn(
+        month_caption: "relative flex h-10 items-center justify-center px-10",
+        caption: "relative flex h-10 items-center justify-center px-10",
+        caption_label: cn("text-sm font-medium", isDropdownLayout && "sr-only"),
+        dropdowns: "flex items-center justify-center gap-2",
+        caption_dropdowns: "flex items-center justify-center gap-2",
+        dropdown_root:
+          "rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-sm",
+        dropdown:
+          "h-8 cursor-pointer rounded-md bg-transparent px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))]",
+        nav: "pointer-events-none absolute inset-x-0 top-2 !flex h-8 items-center justify-between",
+        nav_button: cn(buttonVariants({ variant: "ghost" }), "h-7 w-7 p-0"),
+        button_previous: cn(
           buttonVariants({ variant: "ghost" }),
-          "h-9 w-9 p-0 font-normal aria-selected:opacity-100"
+          "pointer-events-auto absolute left-2 top-2 z-10 h-7 w-7 cursor-pointer bg-transparent p-0 opacity-70 hover:opacity-100"
         ),
-        day_selected:
+        button_next: cn(
+          buttonVariants({ variant: "ghost" }),
+          "pointer-events-auto absolute right-2 top-2 z-10 h-7 w-7 cursor-pointer bg-transparent p-0 opacity-70 hover:opacity-100"
+        ),
+        nav_button_previous:
+          "pointer-events-auto absolute left-1 z-10 h-7 w-7 cursor-pointer",
+        nav_button_next:
+          "pointer-events-auto absolute right-1 z-10 h-7 w-7 cursor-pointer",
+        chevron: "h-4 w-4",
+        month_grid: "w-full border-collapse",
+        weekdays: "flex",
+        weekday:
+          "text-[hsl(var(--muted-foreground))] rounded-md w-9 font-normal text-[0.8rem]",
+        week: "mt-2 flex w-full",
+        day: "h-9 w-9 p-0 text-center text-sm",
+        day_button: cn(
+          buttonVariants({ variant: "ghost" }),
+          "h-9 w-9 cursor-pointer p-0 font-normal aria-selected:opacity-100"
+        ),
+        selected:
           "bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--primary-foreground))]",
-        day_today: "bg-[hsl(var(--accent))] text-[hsl(var(--accent-foreground))]",
-        day_outside:
+        today: "bg-[hsl(var(--accent))] text-[hsl(var(--accent-foreground))]",
+        outside:
           "text-[hsl(var(--muted-foreground))] opacity-50 aria-selected:bg-[hsl(var(--muted))] aria-selected:text-[hsl(var(--muted-foreground))] aria-selected:opacity-30",
-        day_disabled: "text-[hsl(var(--muted-foreground))] opacity-50",
-        day_range_middle:
+        disabled: "text-[hsl(var(--muted-foreground))] opacity-50",
+        range_middle:
           "aria-selected:bg-[hsl(var(--accent))] aria-selected:text-[hsl(var(--accent-foreground))]",
-        day_hidden: "invisible",
+        hidden: "invisible",
         ...classNames,
+      }}
+      components={{
+        Chevron: ({ orientation, className, ...props }) =>
+          orientation === "left" ? (
+            <ChevronLeft className={cn("h-4 w-4", className)} {...props} />
+          ) : orientation === "down" ? (
+            <ChevronDown className={cn("h-4 w-4", className)} {...props} />
+          ) : orientation === "up" ? (
+            <ChevronUp className={cn("h-4 w-4", className)} {...props} />
+          ) : (
+            <ChevronRight className={cn("h-4 w-4", className)} {...props} />
+          ),
       }}
       {...props}
     />

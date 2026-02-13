@@ -3,7 +3,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { nanoid } from "nanoid";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
-import { Calendar as CalendarIcon, Link2Off, Moon, Sun } from "lucide-react";
+import { CalendarDays, Link2Off, Moon, Sun } from "lucide-react";
 import { format, isValid, parse } from "date-fns";
 
 import { Button } from "@/components/ui/button";
@@ -49,7 +49,11 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { useLocalStorageState } from "@/hooks/useLocalStorageState";
 import { cn } from "@/lib/utils";
 
@@ -773,8 +777,8 @@ const InvoiceShell = ({
   const isPreviewPage = pathname.startsWith("/preview");
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_hsl(var(--accent))_0%,_transparent_55%)] pb-20">
-      <header className="no-print sticky top-0 z-40 w-full border-b border-[hsl(var(--border))] bg-[hsl(var(--background))]/90 backdrop-blur">
+    <div className="min-h-screen bg-[hsl(var(--background))] pb-20">
+      <header className="no-print sticky top-0 z-40 w-full border-b border-[hsl(var(--border))] bg-[hsl(var(--background))]/75 backdrop-blur">
         <TooltipProvider>
           <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-10">
             <div className="flex items-center gap-3">
@@ -919,20 +923,25 @@ const InvoiceShell = ({
             <DialogTitle>Support this project</DialogTitle>
             <DialogDescription className="space-y-3 text-sm">
               <p>
-                This website is inspired by invoice-generator.com. After using it for years, I was
-                disappointed to find it riddled with ads.
+                This website is inspired by invoice-generator.com. After using
+                it for years, I was disappointed to find it riddled with ads.
               </p>
               <p>
-                My commitment is to pay to host this out of pocket and never collect ad revenue or
-                payments from users of any kind, as long as it remains useful to myself or anyone else.
+                My commitment is to pay to host this out of pocket and never
+                collect ad revenue or payments from users of any kind, as long
+                as it remains useful to myself or anyone else.
               </p>
               <p>
-                Any donations would be very helpful. Currently, the domain is $1.20 per month and hosting
-                is free, but if usage increases, costs will go up as well. Thank you!
+                Any donations would be very helpful. Currently, the domain is
+                $1.20 per month and hosting is free, but if usage increases,
+                costs will go up as well. Thank you!
               </p>
             </DialogDescription>
             <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))] px-4 py-3 text-left text-sm">
-              Wallet: <span className="font-mono">0xc17510C86bE51FB1ba32FbD6ab2bD7a83A4A89dE</span>
+              Wallet:{" "}
+              <span className="font-mono">
+                0xc17510C86bE51FB1ba32FbD6ab2bD7a83A4A89dE
+              </span>
             </div>
           </DialogHeader>
         </DialogContent>
@@ -981,26 +990,46 @@ export function InvoiceEditorPage() {
     onChange: (value: string) => void;
     placeholder: string;
   }) => {
+    const displayFormat = "MM/dd/yyyy";
+    const [open, setOpen] = React.useState(false);
+    const today = new Date();
+    const startMonth = new Date(today.getFullYear() - 100, 0, 1);
+    const endMonth = new Date(today.getFullYear() + 100, 11, 31);
     const parsed = value ? parse(value, "yyyy-MM-dd", new Date()) : undefined;
     const selected = parsed && isValid(parsed) ? parsed : undefined;
 
     return (
-      <Popover>
+      <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
             variant="outline"
             data-empty={!selected}
-            className="w-full justify-start text-left font-normal data-[empty=true]:text-[hsl(var(--muted-foreground))]"
+            className="w-full justify-between font-normal data-[empty=true]:text-[hsl(var(--muted-foreground))]"
           >
-            <CalendarIcon className="mr-2 h-4 w-4" />
-            {selected ? format(selected, "dd/MM/yy") : <span>{placeholder}</span>}
+            <span>
+              {selected ? format(selected, displayFormat) : placeholder}
+            </span>
+            <CalendarDays className="h-4 w-4 shrink-0 opacity-70" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-auto p-0">
+        <PopoverContent
+          align="start"
+          side="top"
+          avoidCollisions={false}
+          sideOffset={8}
+          className="w-auto overflow-hidden p-0"
+        >
           <Calendar
             mode="single"
             selected={selected}
-            onSelect={(date) => onChange(date ? format(date, "yyyy-MM-dd") : "")}
+            captionLayout="dropdown"
+            startMonth={startMonth}
+            endMonth={endMonth}
+            onSelect={(date) => {
+              onChange(date ? format(date, "yyyy-MM-dd") : "");
+              setOpen(false);
+            }}
+            defaultMonth={selected}
             initialFocus
           />
         </PopoverContent>
@@ -1036,7 +1065,7 @@ export function InvoiceEditorPage() {
         <div className="print-only" />
         <div className="no-print">
           <Tabs defaultValue="details" className="space-y-4">
-            <TabsList className="flex w-full justify-start">
+            <TabsList className="flex w-full justify-start bg-transparent">
               <TabsTrigger value="details">Details</TabsTrigger>
               <TabsTrigger value="items">Items</TabsTrigger>
               <TabsTrigger value="totals">Totals</TabsTrigger>
@@ -1285,7 +1314,7 @@ export function InvoiceEditorPage() {
                           meta: { ...data.meta, issueDate: value },
                         }))
                       }
-                      placeholder="dd/mm/yy"
+                      placeholder="mm/dd/yyyy"
                     />
                   </Field>
                   <Field
@@ -1300,7 +1329,7 @@ export function InvoiceEditorPage() {
                           meta: { ...data.meta, paymentDate: value },
                         }))
                       }
-                      placeholder="dd/mm/yy"
+                      placeholder="mm/dd/yyyy"
                     />
                   </Field>
                   <Field
@@ -1315,7 +1344,7 @@ export function InvoiceEditorPage() {
                           meta: { ...data.meta, dueDate: value },
                         }))
                       }
-                      placeholder="dd/mm/yy"
+                      placeholder="mm/dd/yyyy"
                     />
                   </Field>
                   <Field
@@ -1823,7 +1852,9 @@ export function InvoiceEditorPage() {
                 </CardHeader>
                 <CardContent className="grid gap-6 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <Label className="text-xs text-[hsl(var(--muted-foreground))]">Logo size</Label>
+                    <Label className="text-xs text-[hsl(var(--muted-foreground))]">
+                      Logo size
+                    </Label>
                     <Select
                       value={activeInvoice.style.logoSize}
                       onValueChange={(value) =>
@@ -1847,7 +1878,9 @@ export function InvoiceEditorPage() {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-xs text-[hsl(var(--muted-foreground))]">Logo placement</Label>
+                    <Label className="text-xs text-[hsl(var(--muted-foreground))]">
+                      Logo placement
+                    </Label>
                     <Select
                       value={activeInvoice.style.logoPlacement}
                       onValueChange={(value) =>
@@ -2088,8 +2121,11 @@ export function InvoiceLibraryPage() {
   } = useInvoiceStore();
   const [selectedFolderId, setSelectedFolderId] = React.useState<string>("all");
   const [newFolderName, setNewFolderName] = React.useState("");
-  const [folderToDelete, setFolderToDelete] = React.useState<InvoiceFolder | null>(null);
-  const [dragOverFolderId, setDragOverFolderId] = React.useState<string | null>(null);
+  const [folderToDelete, setFolderToDelete] =
+    React.useState<InvoiceFolder | null>(null);
+  const [dragOverFolderId, setDragOverFolderId] = React.useState<string | null>(
+    null
+  );
 
   const onExport = () =>
     exportToPdf(
@@ -2123,7 +2159,9 @@ export function InvoiceLibraryPage() {
   const removeFolder = (folderId: string) => {
     setStore((current) => ({
       ...current,
-      folders: (current.folders ?? []).filter((folder) => folder.id !== folderId),
+      folders: (current.folders ?? []).filter(
+        (folder) => folder.id !== folderId
+      ),
       invoices: current.invoices.map((invoice) =>
         invoice.folderId === folderId ? { ...invoice, folderId: null } : invoice
       ),
@@ -2172,32 +2210,20 @@ export function InvoiceLibraryPage() {
         <Card>
           <CardHeader>
             <CardTitle>Invoice Library</CardTitle>
-            <CardDescription>Manage saved invoices.</CardDescription>
+            <CardDescription className="text-wrap whitespace-pre-wrap text-foreground/60">
+              This is where your <strong>invoices</strong> are stored. You can{" "}
+              <strong>create folders</strong> and <strong>drag invoices</strong>{" "}
+              into folders to keep them <strong>organized</strong>. Your
+              invoices are stored <strong>locally</strong> in{" "}
+              <strong>browser local storage</strong> and are{" "}
+              <strong>not shared</strong> with anyone or{" "}
+              <strong>stored on a server</strong>. If you{" "}
+              <strong>clear your browser history</strong>, your invoices will be{" "}
+              <strong>deleted</strong>.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium">Local storage only</p>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-[hsl(var(--border))] text-xs">
-                          i
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        Your data never leaves this browser. Clearing history
-                        removes invoices.
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </div>
-                <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                  Your data never leaves this browser. Deleting history removes
-                  the invoices permanently.
-                </p>
-              </div>
               <Button variant="secondary" onClick={addInvoice}>
                 New invoice
               </Button>
@@ -2205,17 +2231,9 @@ export function InvoiceLibraryPage() {
             <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label className="text-xs text-[hsl(var(--muted-foreground))]">Folders</Label>
-                  <div className="grid gap-2">
-                    <Input
-                      placeholder="New folder name"
-                      value={newFolderName}
-                      onChange={(event) => setNewFolderName(event.target.value)}
-                    />
-                    <Button variant="outline" onClick={addFolder}>
-                      Add folder
-                    </Button>
-                  </div>
+                  <Label className="text-xs text-[hsl(var(--muted-foreground))]">
+                    Folders
+                  </Label>
                 </div>
                 <div className="space-y-2">
                   <Button
@@ -2228,13 +2246,16 @@ export function InvoiceLibraryPage() {
                     onDragLeave={() => setDragOverFolderId(null)}
                     className={cn(
                       "w-full justify-start",
-                      dragOverFolderId === "all" && "ring-2 ring-[hsl(var(--primary))]"
+                      dragOverFolderId === "all" &&
+                        "ring-2 ring-[hsl(var(--primary))]"
                     )}
                   >
                     All invoices
                   </Button>
                   <Button
-                    variant={selectedFolderId === "unfiled" ? "default" : "outline"}
+                    variant={
+                      selectedFolderId === "unfiled" ? "default" : "outline"
+                    }
                     size="sm"
                     onClick={() => setSelectedFolderId("unfiled")}
                     onDragOver={(event) => event.preventDefault()}
@@ -2252,7 +2273,9 @@ export function InvoiceLibraryPage() {
                   {folders.map((folder) => (
                     <div key={folder.id} className="flex items-center gap-2">
                       <Button
-                        variant={selectedFolderId === folder.id ? "default" : "outline"}
+                        variant={
+                          selectedFolderId === folder.id ? "default" : "outline"
+                        }
                         size="sm"
                         onClick={() => setSelectedFolderId(folder.id)}
                         onDragOver={(event) => event.preventDefault()}
@@ -2276,10 +2299,22 @@ export function InvoiceLibraryPage() {
                       </Button>
                     </div>
                   ))}
+                  <div className="grid gap-2">
+                    <Input
+                      placeholder="New folder name"
+                      value={newFolderName}
+                      onChange={(event) => setNewFolderName(event.target.value)}
+                    />
+                    <Button variant="outline" onClick={addFolder}>
+                      Add folder
+                    </Button>
+                  </div>
                 </div>
               </div>
               <div className="space-y-3">
-                <Label className="text-xs text-[hsl(var(--muted-foreground))]">Invoices</Label>
+                <Label className="text-xs text-[hsl(var(--muted-foreground))]">
+                  Invoices
+                </Label>
                 <div className="max-h-[calc(100vh-320px)] min-h-[260px] space-y-2 overflow-auto">
                   {visibleInvoices.map((invoice) => {
                     const isActive = invoice.id === store.activeInvoiceId;
@@ -2322,7 +2357,11 @@ export function InvoiceLibraryPage() {
                             variant="secondary"
                             size="sm"
                             onClick={() =>
-                              exportToPdf(invoice.id, setActiveInvoice, "invoice-export")
+                              exportToPdf(
+                                invoice.id,
+                                setActiveInvoice,
+                                "invoice-export"
+                              )
                             }
                           >
                             Export PDF
@@ -2341,16 +2380,23 @@ export function InvoiceLibraryPage() {
                 </div>
               </div>
             </div>
-            <Dialog open={Boolean(folderToDelete)} onOpenChange={() => setFolderToDelete(null)}>
+            <Dialog
+              open={Boolean(folderToDelete)}
+              onOpenChange={() => setFolderToDelete(null)}
+            >
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Delete folder?</DialogTitle>
                   <DialogDescription>
-                    This will remove the folder and move its invoices back to Unfiled.
+                    This will remove the folder and move its invoices back to
+                    Unfiled.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setFolderToDelete(null)}>
+                  <Button
+                    variant="outline"
+                    onClick={() => setFolderToDelete(null)}
+                  >
                     Cancel
                   </Button>
                   <Button
@@ -2492,7 +2538,9 @@ const InvoicePreview = ({
     invoice.style.useCustomColors
       ? invoice.style.backgroundColor
       : themePalette.background,
-    invoice.style.useCustomColors ? invoice.style.headerColor : themePalette.header
+    invoice.style.useCustomColors
+      ? invoice.style.headerColor
+      : themePalette.header
   );
 
   const wrapperStyle: React.CSSProperties = {
@@ -2548,14 +2596,13 @@ const InvoicePreview = ({
         "w-full space-y-6 border p-6",
         templateStyles.body,
         exportMode ? "rounded-none border-0" : "rounded-2xl",
-        template === "minimal" && !exportMode && "border-transparent shadow-none"
+        template === "minimal" &&
+          !exportMode &&
+          "border-transparent shadow-none"
       )}
       style={wrapperStyle}
     >
-      <div
-        className={cn("p-4", exportMode ? "rounded-none" : "rounded-xl")}
-        style={headerStyle}
-      >
+      <div className="rounded-none p-4" style={headerStyle}>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.3em]">
@@ -2594,7 +2641,11 @@ const InvoicePreview = ({
             <img
               src={invoice.logoData}
               alt="Invoice logo"
-              className={cn("w-auto object-contain", logoSizeClass, "max-w-[220px]")}
+              className={cn(
+                "w-auto object-contain",
+                logoSizeClass,
+                "max-w-[220px]"
+              )}
             />
           ) : null}
         </div>
@@ -2606,10 +2657,17 @@ const InvoicePreview = ({
             <img
               src={invoice.logoData}
               alt="Invoice logo"
-              className={cn("mb-3 w-auto object-contain", logoSizeClass, "max-w-[260px]")}
+              className={cn(
+                "mb-3 w-auto object-contain",
+                logoSizeClass,
+                "max-w-[260px]"
+              )}
             />
           ) : null}
-          <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: palette.muted }}>
+          <p
+            className="text-xs font-semibold uppercase tracking-wide"
+            style={{ color: palette.muted }}
+          >
             <InlineEditableText
               value={invoice.labels.from}
               onChange={
@@ -2687,7 +2745,10 @@ const InvoicePreview = ({
           </p>
         </div>
         <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: palette.muted }}>
+          <p
+            className="text-xs font-semibold uppercase tracking-wide"
+            style={{ color: palette.muted }}
+          >
             <InlineEditableText
               value={invoice.labels.billTo}
               onChange={
@@ -2811,7 +2872,10 @@ const InvoicePreview = ({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <p className="text-xs uppercase tracking-wide" style={{ color: palette.muted }}>
+          <p
+            className="text-xs uppercase tracking-wide"
+            style={{ color: palette.muted }}
+          >
             <InlineEditableText
               value={invoice.labels.issueDate}
               onChange={
@@ -2842,7 +2906,10 @@ const InvoicePreview = ({
           </p>
         </div>
         <div>
-          <p className="text-xs uppercase tracking-wide" style={{ color: palette.muted }}>
+          <p
+            className="text-xs uppercase tracking-wide"
+            style={{ color: palette.muted }}
+          >
             <InlineEditableText
               value={invoice.labels.paymentTerms}
               onChange={
@@ -2873,7 +2940,10 @@ const InvoicePreview = ({
           </p>
         </div>
         <div>
-          <p className="text-xs uppercase tracking-wide" style={{ color: palette.muted }}>
+          <p
+            className="text-xs uppercase tracking-wide"
+            style={{ color: palette.muted }}
+          >
             <InlineEditableText
               value={invoice.labels.paymentDate}
               onChange={
@@ -2904,7 +2974,10 @@ const InvoicePreview = ({
           </p>
         </div>
         <div>
-          <p className="text-xs uppercase tracking-wide" style={{ color: palette.muted }}>
+          <p
+            className="text-xs uppercase tracking-wide"
+            style={{ color: palette.muted }}
+          >
             <InlineEditableText
               value={invoice.labels.dueDate}
               onChange={
@@ -2935,7 +3008,10 @@ const InvoicePreview = ({
           </p>
         </div>
         <div>
-          <p className="text-xs uppercase tracking-wide" style={{ color: palette.muted }}>
+          <p
+            className="text-xs uppercase tracking-wide"
+            style={{ color: palette.muted }}
+          >
             <InlineEditableText
               value={invoice.labels.poNumber}
               onChange={
@@ -3060,7 +3136,9 @@ const InvoicePreview = ({
                             onUpdate?.((data) => ({
                               ...data,
                               items: data.items.map((entry) =>
-                                entry.id === item.id ? { ...entry, name: value } : entry
+                                entry.id === item.id
+                                  ? { ...entry, name: value }
+                                  : entry
                               ),
                             }))
                         : undefined
@@ -3097,7 +3175,9 @@ const InvoicePreview = ({
                           onUpdate?.((data) => ({
                             ...data,
                             items: data.items.map((entry) =>
-                              entry.id === item.id ? { ...entry, quantity: value } : entry
+                              entry.id === item.id
+                                ? { ...entry, quantity: value }
+                                : entry
                             ),
                           }))
                       : undefined
@@ -3114,7 +3194,9 @@ const InvoicePreview = ({
                           onUpdate?.((data) => ({
                             ...data,
                             items: data.items.map((entry) =>
-                              entry.id === item.id ? { ...entry, rate: value } : entry
+                              entry.id === item.id
+                                ? { ...entry, rate: value }
+                                : entry
                             ),
                           }))
                       : undefined
@@ -3130,7 +3212,10 @@ const InvoicePreview = ({
       <div className="grid gap-6 sm:grid-cols-[minmax(0,1fr)_240px]">
         <div className="space-y-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: palette.muted }}>
+            <p
+              className="text-xs font-semibold uppercase tracking-wide"
+              style={{ color: palette.muted }}
+            >
               <InlineEditableText
                 value={invoice.labels.notes}
                 onChange={
@@ -3163,7 +3248,10 @@ const InvoicePreview = ({
             </p>
           </div>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: palette.muted }}>
+            <p
+              className="text-xs font-semibold uppercase tracking-wide"
+              style={{ color: palette.muted }}
+            >
               <InlineEditableText
                 value={invoice.labels.terms}
                 onChange={
@@ -3205,7 +3293,10 @@ const InvoicePreview = ({
           style={{ borderColor: palette.border }}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs uppercase tracking-wide" style={{ color: palette.muted }}>
+            <span
+              className="text-xs uppercase tracking-wide"
+              style={{ color: palette.muted }}
+            >
               <InlineEditableText
                 value={invoice.labels.subtotal}
                 onChange={
@@ -3223,7 +3314,10 @@ const InvoicePreview = ({
           </div>
           {invoice.totals.taxEnabled ? (
             <div className="flex items-center justify-between">
-              <span className="text-xs uppercase tracking-wide" style={{ color: palette.muted }}>
+              <span
+                className="text-xs uppercase tracking-wide"
+                style={{ color: palette.muted }}
+              >
                 <InlineEditableText
                   value={invoice.labels.tax}
                   onChange={
@@ -3242,7 +3336,10 @@ const InvoicePreview = ({
           ) : null}
           {invoice.totals.discountEnabled ? (
             <div className="flex items-center justify-between">
-              <span className="text-xs uppercase tracking-wide" style={{ color: palette.muted }}>
+              <span
+                className="text-xs uppercase tracking-wide"
+                style={{ color: palette.muted }}
+              >
                 <InlineEditableText
                   value={invoice.labels.discount}
                   onChange={
@@ -3261,7 +3358,10 @@ const InvoicePreview = ({
           ) : null}
           {invoice.totals.shippingEnabled ? (
             <div className="flex items-center justify-between">
-              <span className="text-xs uppercase tracking-wide" style={{ color: palette.muted }}>
+              <span
+                className="text-xs uppercase tracking-wide"
+                style={{ color: palette.muted }}
+              >
                 <InlineEditableText
                   value={invoice.labels.shipping}
                   onChange={
