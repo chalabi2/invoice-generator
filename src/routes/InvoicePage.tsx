@@ -1,9 +1,8 @@
 import * as React from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { nanoid } from "nanoid";
-import html2canvas from "html2canvas";
-import { jsPDF } from "jspdf";
-import { CalendarDays, Link2Off, Moon, Sun, Upload } from "lucide-react";
+import { CalendarDays, Link2Off, Loader2, Moon, Sun, Upload } from "lucide-react";
+import { exportInvoiceToPdf } from "@/lib/pdf-service";
 import { format, isValid, parse } from "date-fns";
 
 import { Button } from "@/components/ui/button";
@@ -745,52 +744,53 @@ const useInvoiceStore = () => {
   };
 };
 
+/** Export state for tracking PDF generation progress */
+/** Export state for tracking PDF generation progress */
+interface ExportState {
+  isExporting: boolean;
+  status: string;
+  error: string | null;
+}
+
+/**
+ * Export invoice to PDF using server-side rendering with client-side fallback.
+ * Provides proper page breaks and multi-page support.
+ */
 const exportToPdf = async (
-  invoiceId: string | undefined,
-  setActive: ((id: string) => void) | undefined,
-  targetId: string
+  invoice: InvoiceData,
+  fallbackElementId: string,
+  setExportState: React.Dispatch<React.SetStateAction<ExportState>>
 ) => {
-  if (invoiceId && setActive) {
-    setActive(invoiceId);
-  }
+  setExportState({ isExporting: true, status: "Preparing export...", error: null });
 
-  window.setTimeout(async () => {
-    const element = document.getElementById(targetId);
-    if (!element) return;
-
-    const canvas = await html2canvas(element, {
-      scale: 2,
-      useCORS: true,
-      backgroundColor: null,
+  try {
+    const result = await exportInvoiceToPdf(invoice, fallbackElementId, {
+      filename: `invoice-${invoice.meta.invoiceNumber || invoice.id}.pdf`,
+      onProgress: (status) => {
+        setExportState((prev) => ({ ...prev, status }));
+      },
     });
 
-    const imageData = canvas.toDataURL("image/png");
-    const pdf = new jsPDF({
-      orientation: "portrait",
-      unit: "pt",
-      format: "letter",
-    });
-
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const imgWidth = canvas.width;
-    const imgHeight = canvas.height;
-    const renderWidth = pageWidth;
-    const renderHeight = (imgHeight * renderWidth) / imgWidth;
-
-    let position = 0;
-    let page = 0;
-    while (position < renderHeight) {
-      if (page > 0) {
-        pdf.addPage();
-      }
-      pdf.addImage(imageData, "PNG", 0, -position, renderWidth, renderHeight);
-      position += pageHeight;
-      page += 1;
+    if (result.success) {
+      setExportState({
+        isExporting: false,
+        status: `PDF generated successfully (${result.method === "server" ? "server-side" : "client-side"})`,
+        error: null,
+      });
+    } else {
+      setExportState({
+        isExporting: false,
+        status: "",
+        error: result.error || "Failed to generate PDF",
+      });
     }
-
-    pdf.save("invoice.pdf");
-  }, 120);
+  } catch (error) {
+    setExportState({
+      isExporting: false,
+      status: "",
+      error: error instanceof Error ? error.message : "Failed to generate PDF",
+    });
+  }
 };
 
 const InvoiceShell = ({
@@ -801,6 +801,7 @@ const InvoiceShell = ({
   exportTargetId,
   exportPreview,
   activeInvoice,
+  isExporting = false,
 }: {
   children: React.ReactNode;
   store: StoreState;
@@ -809,6 +810,7 @@ const InvoiceShell = ({
   exportTargetId: string;
   exportPreview: React.ReactNode;
   activeInvoice: InvoiceData;
+  isExporting?: boolean;
 }) => {
   const [isSupportOpen, setIsSupportOpen] = React.useState(false);
   const pathname = useRouterState({
@@ -897,11 +899,27 @@ const InvoiceShell = ({
               </NavigationMenu>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="secondary" size="sm" onClick={onExport}>
-                    Export PDF
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={onExport}
+                    disabled={isExporting}
+                  >
+                    {isExporting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      "Export PDF"
+                    )}
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Print or save as PDF</TooltipContent>
+                <TooltipContent>
+                  {isExporting
+                    ? "Generating PDF with proper page breaks..."
+                    : "Print or save as PDF"}
+                </TooltipContent>
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -962,7 +980,12 @@ const InvoiceShell = ({
         </DialogTrigger>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Support this project</DialogTitle>
+            <DialogTitle>
+              Support this project{" "}
+              <span className="text-xs ml-4 text-[hsl(var(--muted-foreground))]">
+                last updated: 2026-02-13
+              </span>
+            </DialogTitle>
             <DialogDescription className="space-y-3 text-sm">
               <p>
                 This website is inspired by invoice-generator.com. After using
@@ -975,11 +998,14 @@ const InvoiceShell = ({
               </p>
               <p>
                 Any donations would be very helpful. Currently, the domain is
-                $1.20 per month and hosting is free, but if usage increases,
-                costs will go up as well. Thank you!
+                $1.20 per month, the frontend is hosted on cloudflare pages and
+                is currently free, the pdf generation is also a cloudflare
+                worker and its cost is directly proportional to the number of
+                requests. If usage increases, costs will go up as well. Thank
+                you!
               </p>
             </DialogDescription>
-            <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))] px-4 py-3 text-left text-sm">
+            <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))] px-4 py-3 mt-4 text-left text-sm">
               Wallet:{" "}
               <span className="font-mono">
                 0xc17510C86bE51FB1ba32FbD6ab2bD7a83A4A89dE
@@ -999,8 +1025,14 @@ export function InvoiceEditorPage() {
     activeInvoice,
     invoiceTheme,
     updateInvoice,
-    setActiveInvoice,
   } = useInvoiceStore();
+
+  // Export state for tracking PDF generation progress
+  const [exportState, setExportState] = React.useState<ExportState>({
+    isExporting: false,
+    status: "",
+    error: null,
+  });
 
   const totals = React.useMemo(() => getTotals(activeInvoice), [activeInvoice]);
   const logoUploadInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -1096,12 +1128,7 @@ export function InvoiceEditorPage() {
     );
   };
 
-  const onExport = () =>
-    exportToPdf(
-      store.activeInvoiceId ?? undefined,
-      setActiveInvoice,
-      "invoice-export"
-    );
+  const onExport = () => exportToPdf(activeInvoice, "invoice-export", setExportState);
 
   return (
     <InvoiceShell
@@ -1119,6 +1146,7 @@ export function InvoiceEditorPage() {
         />
       }
       activeInvoice={activeInvoice}
+      isExporting={exportState.isExporting}
     >
       <div className="space-y-6">
         <div className="print-only" />
@@ -1152,9 +1180,9 @@ export function InvoiceEditorPage() {
                           <Input
                             placeholder="Paste logo URL"
                             value={
-                              normalizeLogoValue(activeInvoice.logoData).startsWith(
-                                "data:"
-                              )
+                              normalizeLogoValue(
+                                activeInvoice.logoData
+                              ).startsWith("data:")
                                 ? ""
                                 : activeInvoice.logoData
                             }
@@ -1186,9 +1214,9 @@ export function InvoiceEditorPage() {
                           </Button>
                           <p className="text-xs text-[hsl(var(--muted-foreground))] sm:col-span-2">
                             {logoFileName ||
-                              (normalizeLogoValue(activeInvoice.logoData).startsWith(
-                                "data:"
-                              )
+                              (normalizeLogoValue(
+                                activeInvoice.logoData
+                              ).startsWith("data:")
                                 ? "Uploaded image selected"
                                 : "PNG, JPG, SVG, WEBP")}
                           </p>
@@ -2148,15 +2176,17 @@ export function InvoicePreviewPage() {
     setStore,
     activeInvoice,
     invoiceTheme,
-    setActiveInvoice,
     updateInvoice,
   } = useInvoiceStore();
-  const onExport = () =>
-    exportToPdf(
-      store.activeInvoiceId ?? undefined,
-      setActiveInvoice,
-      "invoice-export"
-    );
+
+  // Export state for tracking PDF generation progress
+  const [exportState, setExportState] = React.useState<ExportState>({
+    isExporting: false,
+    status: "",
+    error: null,
+  });
+
+  const onExport = () => exportToPdf(activeInvoice, "invoice-export", setExportState);
 
   return (
     <InvoiceShell
@@ -2174,6 +2204,7 @@ export function InvoicePreviewPage() {
         />
       }
       activeInvoice={activeInvoice}
+      isExporting={exportState.isExporting}
     >
       <div className="space-y-6">
         <div>
@@ -2208,12 +2239,14 @@ export function InvoiceLibraryPage() {
     null
   );
 
-  const onExport = () =>
-    exportToPdf(
-      store.activeInvoiceId ?? undefined,
-      setActiveInvoice,
-      "invoice-export"
-    );
+  // Export state for tracking PDF generation progress
+  const [exportState, setExportState] = React.useState<ExportState>({
+    isExporting: false,
+    status: "",
+    error: null,
+  });
+
+  const onExport = () => exportToPdf(activeInvoice, "invoice-export", setExportState);
 
   const folders = store.folders ?? [];
   const visibleInvoices = store.invoices.filter((invoice) => {
@@ -2286,6 +2319,7 @@ export function InvoiceLibraryPage() {
         />
       }
       activeInvoice={activeInvoice}
+      isExporting={exportState.isExporting}
     >
       <div className="no-print space-y-6">
         <Card>
@@ -2437,15 +2471,21 @@ export function InvoiceLibraryPage() {
                           <Button
                             variant="secondary"
                             size="sm"
-                            onClick={() =>
-                              exportToPdf(
-                                invoice.id,
-                                setActiveInvoice,
-                                "invoice-export"
-                              )
-                            }
+                            disabled={exportState.isExporting}
+                            onClick={() => {
+                              // Set this invoice as active and then export using the full invoice data
+                              setActiveInvoice(invoice.id);
+                              exportToPdf(invoice.data, "invoice-export", setExportState);
+                            }}
                           >
-                            Export PDF
+                            {exportState.isExporting ? (
+                              <>
+                                <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                                Exporting...
+                              </>
+                            ) : (
+                              "Export PDF"
+                            )}
                           </Button>
                           <Button
                             variant="ghost"
@@ -2687,7 +2727,10 @@ const InvoicePreview = ({
       )}
       style={wrapperStyle}
     >
-      <div className={cn("p-4", templateStyles.headerRadius)} style={headerStyle}>
+      <div
+        className={cn("p-4", templateStyles.headerRadius)}
+        style={headerStyle}
+      >
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.3em]">

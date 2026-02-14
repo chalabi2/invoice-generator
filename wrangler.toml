@@ -2,5 +2,13 @@ name = "invoicegenerator-xyz"
 compatibility_date = "2026-02-10"
 pages_build_output_dir = "dist"
 
+# Enable Node.js compatibility for Workers (required for dependencies like puppeteer)
+compatibility_flags = ["nodejs_compat"]
+
 [vars]
 SITE_URL = "https://invoicegenerator.xyz"
+
+# Browser rendering binding for PDF generation
+# Note: Requires Cloudflare Workers Paid plan for browser rendering
+[browser]
+binding = "BROWSER"
