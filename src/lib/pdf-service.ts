@@ -40,9 +40,11 @@ export async function exportInvoiceToPdf(
 
     onProgress?.("Capturing content...");
 
-    /* Render the element at 2× resolution for crisp text */
+    /* Render the element at higher resolution for crisp text/logos */
+    const pixelRatio =
+      typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
     const canvas = await html2canvas(element, {
-      scale: 2,
+      scale: Math.max(3, pixelRatio * 2),
       useCORS: true,
       backgroundColor: null,
       logging: false,
@@ -66,9 +68,9 @@ export async function exportInvoiceToPdf(
      */
     const pdf = new jsPDF("p", "pt", [pdfWidthPt, pdfHeightPt]);
 
-    /* Use JPEG encoding — much smaller data URL than PNG */
-    const imgData = canvas.toDataURL("image/jpeg", 0.95);
-    pdf.addImage(imgData, "JPEG", 0, 0, pdfWidthPt, pdfHeightPt);
+    /* Use PNG to avoid JPEG artifacts on logos/text */
+    const imgData = canvas.toDataURL("image/png");
+    pdf.addImage(imgData, "PNG", 0, 0, pdfWidthPt, pdfHeightPt);
 
     /*
      * Safety: ensure the document has exactly one page.

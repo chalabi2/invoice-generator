@@ -276,8 +276,8 @@ export const InvoicePreview = ({
             </p>
           )}
 
-          <div className="mt-6 space-y-2">
-            <div className="grid grid-cols-[96px_minmax(0,1fr)] items-center gap-2 text-sm" style={{ color: palette.muted }}>
+          <div className="mt-5 space-y-1.5">
+            <div className="grid grid-cols-[96px_minmax(0,1fr)] items-center gap-2 text-sm font-semibold" style={{ color: palette.foreground }}>
               <InlineEditableText
                 value={invoice.labels.billTo}
                 onChange={labelUpdater("billTo")}
@@ -294,7 +294,7 @@ export const InvoicePreview = ({
                         }))
                     : undefined
                 }
-                className="max-w-[22rem]"
+                className="max-w-[22rem] font-semibold"
               />
             </div>
             {(invoice.client.attnTo?.trim() || canEdit) && (
