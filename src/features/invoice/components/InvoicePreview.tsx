@@ -277,7 +277,7 @@ export const InvoicePreview = ({
           )}
 
           <div className="mt-5 space-y-1.5">
-            <div className="grid grid-cols-[96px_minmax(0,1fr)] items-center gap-2 text-sm font-semibold" style={{ color: palette.foreground }}>
+            <div className="grid grid-cols-[96px_minmax(0,1fr)] items-center gap-2 text-sm" style={{ color: palette.muted }}>
               <InlineEditableText
                 value={invoice.labels.billTo}
                 onChange={labelUpdater("billTo")}
@@ -313,9 +313,9 @@ export const InvoicePreview = ({
                             ...d,
                             client: { ...d.client, attnTo: value },
                           }))
-                      : undefined
+                    : undefined
                   }
-                  className="max-w-[22rem]"
+                  className="max-w-[22rem] font-semibold"
                 />
               </div>
             )}
@@ -372,9 +372,9 @@ export const InvoicePreview = ({
                             ...d,
                             client: { ...d.client, shipTo: value },
                           }))
-                      : undefined
+                    : undefined
                   }
-                  className="max-w-[22rem]"
+                  className="max-w-[22rem] font-semibold"
                 />
               </div>
             )}
