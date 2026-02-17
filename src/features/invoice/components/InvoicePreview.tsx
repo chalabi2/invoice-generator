@@ -294,11 +294,11 @@ export const InvoicePreview = ({
                         }))
                     : undefined
                 }
-                className="max-w-[22rem] font-semibold"
+                className="max-w-[22rem] font-bold text-[hsl(var(--foreground))]"
               />
             </div>
             {(invoice.client.attnTo?.trim() || canEdit) && (
-              <div className="grid grid-cols-[96px_minmax(0,1fr)] items-center gap-2 text-sm" style={{ color: palette.muted }}>
+              <div className="grid grid-cols-[74px_minmax(0,1fr)] items-center gap-1.5 text-sm" style={{ color: palette.muted }}>
                 <InlineEditableText
                   value={invoice.labels.attnTo}
                   onChange={labelUpdater("attnTo")}
@@ -357,7 +357,7 @@ export const InvoicePreview = ({
               </p>
             )}
             {(invoice.client.shipTo?.trim() || canEdit) && (
-              <div className="grid grid-cols-[96px_minmax(0,1fr)] items-center gap-2 text-sm" style={{ color: palette.muted }}>
+              <div className="grid grid-cols-[74px_minmax(0,1fr)] items-center gap-1.5 text-sm" style={{ color: palette.muted }}>
                 <InlineEditableText
                   value={invoice.labels.shipTo}
                   onChange={labelUpdater("shipTo")}
