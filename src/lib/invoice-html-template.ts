@@ -1,7 +1,7 @@
 /**
- * Server-side HTML template generator for invoice PDF rendering.
- * This creates a standalone HTML document that can be rendered by Puppeteer
- * with proper print styles and page break handling.
+ * HTML template generator for invoice rendering.
+ * Creates a standalone HTML document used for the invoice preview
+ * and as the source element for client-side PDF capture.
  */
 
 /** Invoice item structure */
@@ -49,7 +49,6 @@ export interface InvoiceStyle {
   backgroundColor: string;
   useCustomColors: boolean;
   logoSize: "small" | "medium" | "large";
-  logoPlacement: "tucked" | "prominent";
 }
 
 /** Theme options */
@@ -272,8 +271,9 @@ function nl2br(text: string): string {
 }
 
 /**
- * Generate the complete HTML document for PDF rendering.
- * This creates a standalone HTML page with embedded styles optimized for print.
+ * Generate the complete HTML document for invoice rendering.
+ * Layout: Logo + INVOICE title top, right-aligned meta, from/balance-due row,
+ * bill-to, items table, right-aligned totals, then notes and terms stacked.
  */
 export function generateInvoiceHtml(invoice: InvoiceData): string {
   const themePalette = THEME_PALETTES[invoice.preferences.invoiceTheme];
@@ -286,15 +286,30 @@ export function generateInvoiceHtml(invoice: InvoiceData): string {
   const template = invoice.preferences.template;
   const logoSizeStyles = getLogoSizeStyles(invoice.style.logoSize);
 
-  // Template-specific styles
   const isModern = template === "modern";
   const isClassic = template === "classic";
   const isMinimal = template === "minimal";
 
   const borderRadius = isModern ? "0.75rem" : "0";
-  const tableBorderRadius = isModern ? "0.75rem" : "0";
-  const headerBg = isMinimal ? "transparent" : palette.headerOverlay;
   const tableHeaderBg = isClassic || isMinimal ? "transparent" : palette.headerOverlay;
+  const tableHeaderColor = isClassic || isMinimal ? palette.muted : palette.headerForeground;
+  const balanceDueBg = isMinimal ? palette.border : palette.headerOverlay;
+  const balanceDueColor = isMinimal ? palette.foreground : palette.headerForeground;
+
+  /* Build the meta rows array, only including fields that have a value */
+  const metaRows: Array<{ label: string; value: string }> = [];
+  if (invoice.meta.issueDate?.trim()) metaRows.push({ label: invoice.labels.issueDate, value: invoice.meta.issueDate });
+  if (invoice.meta.paymentTerms?.trim()) metaRows.push({ label: invoice.labels.paymentTerms, value: invoice.meta.paymentTerms });
+  if (invoice.meta.dueDate?.trim()) metaRows.push({ label: invoice.labels.dueDate, value: invoice.meta.dueDate });
+  if (invoice.meta.poNumber?.trim()) metaRows.push({ label: invoice.labels.poNumber, value: invoice.meta.poNumber });
+  if (invoice.meta.paymentDate?.trim()) metaRows.push({ label: invoice.labels.paymentDate, value: invoice.meta.paymentDate });
+
+  /* Collect from-contact details for the secondary line beneath the name */
+  const fromDetails = [invoice.from.email, invoice.from.phone].filter(Boolean);
+  
+  /* Check if notes and terms have content */
+  const hasNotes = invoice.notes?.trim();
+  const hasTerms = invoice.terms?.trim();
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -303,381 +318,266 @@ export function generateInvoiceHtml(invoice: InvoiceData): string {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Invoice ${escapeHtml(invoice.meta.invoiceNumber || "Draft")}</title>
   <style>
-    /* Reset and base styles */
-    *, *::before, *::after {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-    
-    /* Print-specific styles for proper page breaks */
-    @page {
-      size: letter;
-      margin: 0.5in;
-    }
-    
-    @media print {
-      html, body {
-        width: 100%;
-        height: auto;
-        margin: 0;
-        padding: 0;
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-        color-adjust: exact !important;
-      }
-      
-      /* Prevent page breaks inside these elements */
-      .invoice-header,
-      .address-section,
-      .meta-section,
-      .totals-section,
-      .notes-section,
-      .terms-section {
-        page-break-inside: avoid;
-        break-inside: avoid;
-      }
-      
-      /* Allow page breaks between rows but keep rows together */
-      .items-table tbody tr {
-        page-break-inside: avoid;
-        break-inside: avoid;
-      }
-      
-      /* Ensure table headers repeat on each page */
-      .items-table thead {
-        display: table-header-group;
-      }
-      
-      /* Keep totals section with last few items when possible */
-      .totals-section {
-        page-break-before: avoid;
-        break-before: avoid;
-      }
-    }
-    
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
       font-family: ${invoice.style.font}, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      font-size: ${isClassic ? "16px" : "14px"};
+      font-size: 14px;
       line-height: 1.5;
       color: ${palette.foreground};
       background-color: ${palette.background};
     }
-    
+
     .invoice-container {
       max-width: 100%;
-      padding: 2rem;
+      padding: 2.5rem;
       background-color: ${palette.background};
-      ${!isMinimal ? `border: 1px solid ${palette.border};` : ""}
-      border-radius: ${borderRadius};
     }
-    
-    /* Header section */
-    .invoice-header {
-      padding: 1rem;
-      margin-bottom: 1.5rem;
-      background-color: ${headerBg};
-      border-radius: ${borderRadius};
+
+    /* ---- Top row: logo left, title right ---- */
+    .invoice-top {
       display: flex;
       justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 1rem;
+      align-items: flex-start;
+      margin-bottom: 0.25rem;
     }
-    
-    .invoice-header .label {
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      letter-spacing: 0.3em;
-      color: ${palette.headerForeground};
-      opacity: 0.8;
-    }
-    
-    .invoice-header .number {
-      font-size: 1.5rem;
-      font-weight: 600;
-      color: ${palette.headerForeground};
-    }
-    
-    .logo-tucked {
-      ${logoSizeStyles}
-      width: auto;
-      max-width: 220px;
-      object-fit: contain;
-    }
-    
-    .logo-prominent {
+
+    .logo-image {
       ${logoSizeStyles}
       width: auto;
       max-width: 260px;
       object-fit: contain;
+    }
+
+    .title-area { text-align: right; }
+
+    .invoice-title {
+      font-size: 2.25rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .invoice-number {
+      font-size: 0.95rem;
+      color: ${palette.muted};
+      margin-top: 0.125rem;
+    }
+
+    /* ---- Meta: right-aligned date/terms table ---- */
+    .meta-section {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 1.25rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .meta-table { border-collapse: collapse; }
+
+    .meta-table td { padding: 0.15rem 0; }
+
+    .meta-label {
+      text-align: right;
+      padding-right: 1rem;
+      color: ${palette.muted};
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    .meta-value {
+      text-align: right;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    /* ---- From name + Balance Due bar ---- */
+    .parties-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
       margin-bottom: 0.75rem;
     }
-    
-    /* Address grid */
-    .address-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 1.5rem;
-      margin-bottom: 1.5rem;
-    }
-    
-    .address-section .label {
-      font-size: 0.75rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
+
+    .from-name { font-size: 1.05rem; font-weight: 600; }
+
+    .from-details {
+      font-size: 0.85rem;
       color: ${palette.muted};
-      margin-bottom: 0.5rem;
+      margin-top: 0.125rem;
     }
-    
-    .address-section .name {
-      font-weight: 600;
-      margin-bottom: 0.25rem;
-    }
-    
-    .address-section p {
-      margin-bottom: 0.25rem;
-    }
-    
-    /* Meta section (dates, PO number, etc.) */
-    .meta-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
+
+    .balance-due-bar {
+      display: flex;
+      align-items: center;
       gap: 1.5rem;
-      margin-bottom: 1.5rem;
-      padding: 1rem;
-      background-color: ${headerBg};
+      padding: 0.625rem 1.25rem;
+      background-color: ${balanceDueBg};
+      color: ${balanceDueColor};
       border-radius: ${borderRadius};
-    }
-    
-    .meta-item .label {
-      font-size: 0.75rem;
       font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: ${palette.headerForeground};
-      opacity: 0.7;
-      margin-bottom: 0.25rem;
     }
-    
-    .meta-item .value {
-      color: ${palette.headerForeground};
-      font-weight: 500;
+
+    .balance-due-bar .amount {
+      font-size: 1.25rem;
+      font-weight: 700;
     }
-    
-    /* Items table */
+
+    /* ---- Bill To ---- */
+    .bill-to-section { margin-bottom: 3rem; }
+
+    .bill-to-section .label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: ${palette.muted};
+      margin-bottom: 0.125rem;
+    }
+
+    .bill-to-section .client-info { font-weight: 500; }
+
+    .client-secondary {
+      font-size: 0.85rem;
+      color: ${palette.muted};
+      margin-top: 0.125rem;
+    }
+
+    /* ---- Items table ---- */
     .items-table {
       width: 100%;
       border-collapse: collapse;
-      margin-bottom: 1.5rem;
+      margin-bottom: 2.5rem;
+      ${isModern ? `border-radius: ${borderRadius}; overflow: hidden;` : ""}
     }
-    
-    .items-table thead {
-      background-color: ${tableHeaderBg};
-    }
-    
+
+    .items-table thead { background-color: ${tableHeaderBg}; }
+
     .items-table th {
-      padding: 0.75rem 1rem;
+      padding: 0.625rem 1rem;
       text-align: left;
-      font-size: 0.75rem;
+      font-size: 0.8rem;
       font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: ${isClassic || isMinimal ? palette.muted : palette.headerForeground};
-      ${isClassic ? `border-bottom: 1px solid ${palette.border};` : ""}
+      color: ${tableHeaderColor};
+      ${isClassic ? `border-bottom: 2px solid ${palette.border};` : ""}
+      ${isMinimal ? `border-bottom: 1px solid ${palette.border};` : ""}
     }
-    
-    .items-table th:first-child {
-      border-top-left-radius: ${tableBorderRadius};
-    }
-    
-    .items-table th:last-child {
-      border-top-right-radius: ${tableBorderRadius};
-      text-align: right;
-    }
-    
+
+    .items-table th:last-child { text-align: right; }
+
     .items-table td {
       padding: 0.75rem 1rem;
       border-bottom: 1px solid ${palette.border};
       vertical-align: top;
     }
-    
-    .items-table td:last-child {
-      text-align: right;
-    }
-    
-    .item-name {
-      font-weight: 500;
-    }
-    
+
+    .items-table td:last-child { text-align: right; }
+
+    .item-name { font-weight: 500; }
+
     .item-description {
-      font-size: 0.875rem;
+      font-size: 0.8rem;
       color: ${palette.muted};
-      margin-top: 0.25rem;
+      margin-top: 0.125rem;
     }
-    
-    .text-right {
-      text-align: right;
-    }
-    
-    /* Totals section */
-    .totals-container {
+
+    /* ---- Totals (right-aligned) ---- */
+    .totals-wrapper {
       display: flex;
       justify-content: flex-end;
-      margin-bottom: 1.5rem;
+      margin-bottom: 2rem;
     }
-    
-    .totals-section {
-      min-width: 280px;
-      padding: 1rem;
-      ${!isMinimal ? `border: 1px solid ${palette.border};` : ""}
-      border-radius: ${borderRadius};
+
+    .totals-table { border-collapse: collapse; min-width: 260px; }
+
+    .totals-table td { padding: 0.3rem 0; }
+
+    .totals-label {
+      text-align: right;
+      padding-right: 1.5rem;
+      color: ${palette.muted};
     }
-    
-    .totals-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 0.5rem 0;
-    }
-    
-    .totals-row.total {
+
+    .totals-value { text-align: right; font-weight: 500; }
+
+    .total-row td {
       font-weight: 700;
-      font-size: 1.125rem;
+      font-size: 1.05rem;
       border-top: 2px solid ${palette.border};
-      margin-top: 0.5rem;
-      padding-top: 0.75rem;
+      padding-top: 0.5rem;
     }
-    
-    .totals-row.amount-due {
+
+    .amount-due-row td {
       font-weight: 700;
-      font-size: 1.25rem;
-      color: ${palette.foreground};
+      font-size: 1.1rem;
     }
-    
-    /* Notes and terms */
-    .footer-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 1.5rem;
-    }
-    
-    .notes-section,
-    .terms-section {
-      padding: 1rem;
-      background-color: ${headerBg};
-      border-radius: ${borderRadius};
-    }
-    
-    .notes-section .label,
-    .terms-section .label {
-      font-size: 0.75rem;
+
+    /* ---- Notes & Terms (stacked) ---- */
+    .notes-section, .terms-section { margin-bottom: 1rem; }
+
+    .section-label {
+      font-size: 0.85rem;
       font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: ${palette.headerForeground};
-      opacity: 0.7;
-      margin-bottom: 0.5rem;
+      color: ${palette.muted};
+      margin-bottom: 0.25rem;
     }
-    
-    .notes-section .content,
-    .terms-section .content {
-      color: ${palette.headerForeground};
+
+    .section-content {
       white-space: pre-wrap;
+      color: ${palette.foreground};
     }
   </style>
 </head>
 <body>
   <div class="invoice-container">
-    <!-- Header with invoice number and optional tucked logo -->
-    <div class="invoice-header">
+    <!-- Top: logo left, INVOICE title + number right -->
+    <div class="invoice-top">
       <div>
-        <p class="label">${escapeHtml(invoice.labels.invoiceNumber)}</p>
-        <p class="number">${escapeHtml(invoice.meta.invoiceNumber || "Draft")}</p>
+        ${invoice.logoData ? `<img src="${invoice.logoData}" alt="Logo" class="logo-image">` : ""}
       </div>
-      ${
-        invoice.logoData && invoice.style.logoPlacement === "tucked"
-          ? `<img src="${invoice.logoData}" alt="Logo" class="logo-tucked">`
-          : ""
-      }
-    </div>
-    
-    <!-- From/To addresses -->
-    <div class="address-grid">
-      <div class="address-section">
-        ${
-          invoice.logoData && invoice.style.logoPlacement === "prominent"
-            ? `<img src="${invoice.logoData}" alt="Logo" class="logo-prominent">`
-            : ""
-        }
-        <p class="label">${escapeHtml(invoice.labels.from)}</p>
-        <p class="name">${escapeHtml(invoice.from.name)}</p>
-        ${invoice.from.email ? `<p>${escapeHtml(invoice.from.email)}</p>` : ""}
-        ${invoice.from.phone ? `<p>${escapeHtml(invoice.from.phone)}</p>` : ""}
-        ${invoice.from.address ? `<p>${nl2br(invoice.from.address)}</p>` : ""}
-      </div>
-      <div class="address-section">
-        <p class="label">${escapeHtml(invoice.labels.billTo)}</p>
-        <p class="name">${escapeHtml(invoice.client.name)}</p>
-        ${invoice.client.email ? `<p>${escapeHtml(invoice.client.email)}</p>` : ""}
-        ${invoice.client.address ? `<p>${nl2br(invoice.client.address)}</p>` : ""}
-        ${
-          invoice.client.attnTo
-            ? `<p style="margin-top: 0.5rem;"><strong>${escapeHtml(invoice.labels.attnTo)}:</strong> ${escapeHtml(invoice.client.attnTo)}</p>`
-            : ""
-        }
-        ${
-          invoice.client.shipTo
-            ? `<p><strong>${escapeHtml(invoice.labels.shipTo)}:</strong> ${nl2br(invoice.client.shipTo)}</p>`
-            : ""
-        }
+      <div class="title-area">
+        <h1 class="invoice-title">${escapeHtml(invoice.labels.invoiceNumber)}</h1>
+        <p class="invoice-number"># ${escapeHtml(invoice.meta.invoiceNumber || "Draft")}</p>
       </div>
     </div>
-    
-    <!-- Meta info (dates, PO, terms) -->
-    <div class="meta-grid">
-      ${
-        invoice.meta.issueDate
-          ? `
-        <div class="meta-item">
-          <p class="label">${escapeHtml(invoice.labels.issueDate)}</p>
-          <p class="value">${escapeHtml(invoice.meta.issueDate)}</p>
-        </div>
-      `
-          : ""
-      }
-      ${
-        invoice.meta.dueDate
-          ? `
-        <div class="meta-item">
-          <p class="label">${escapeHtml(invoice.labels.dueDate)}</p>
-          <p class="value">${escapeHtml(invoice.meta.dueDate)}</p>
-        </div>
-      `
-          : ""
-      }
-      ${
-        invoice.meta.paymentTerms
-          ? `
-        <div class="meta-item">
-          <p class="label">${escapeHtml(invoice.labels.paymentTerms)}</p>
-          <p class="value">${escapeHtml(invoice.meta.paymentTerms)}</p>
-        </div>
-      `
-          : ""
-      }
-      ${
-        invoice.meta.poNumber
-          ? `
-        <div class="meta-item">
-          <p class="label">${escapeHtml(invoice.labels.poNumber)}</p>
-          <p class="value">${escapeHtml(invoice.meta.poNumber)}</p>
-        </div>
-      `
-          : ""
-      }
+
+    <!-- From name + Balance Due bar -->
+    <div class="parties-row">
+      <div>
+        <p class="from-name">${escapeHtml(invoice.from.name)}</p>
+        ${fromDetails.length > 0 ? `
+        <p class="from-details">
+          ${fromDetails.map(d => escapeHtml(d)).join(" &middot; ")}
+        </p>` : ""}
+        ${invoice.from.address?.trim() ? `
+        <p class="from-details">${nl2br(invoice.from.address)}</p>` : ""}
+      </div>
+      <div class="balance-due-bar">
+        <span>${escapeHtml(invoice.labels.amountDue)}:</span>
+        <span class="amount">${formatCurrency(totals.amountDue, currency)}</span>
+      </div>
     </div>
-    
+
+    <!-- Meta: right-aligned date, terms, due date -->
+    ${metaRows.length > 0 ? `
+    <div class="meta-section">
+      <table class="meta-table">
+        ${metaRows.map(row => `
+        <tr>
+          <td class="meta-label">${escapeHtml(row.label)}:</td>
+          <td class="meta-value">${escapeHtml(row.value)}</td>
+        </tr>`).join("")}
+      </table>
+    </div>` : ""}
+
+    <!-- Bill To -->
+    <div class="bill-to-section">
+      <p class="label">${escapeHtml(invoice.labels.billTo)}:</p>
+      <p class="client-info">
+        ${escapeHtml(invoice.client.name)}${invoice.client.attnTo?.trim() ? `, ${escapeHtml(invoice.labels.attnTo)}: ${escapeHtml(invoice.client.attnTo)}` : ""}
+      </p>
+      ${invoice.client.email?.trim() ? `<p class="client-secondary">${escapeHtml(invoice.client.email)}</p>` : ""}
+      ${invoice.client.address?.trim() ? `<p class="client-secondary">${nl2br(invoice.client.address)}</p>` : ""}
+      ${invoice.client.shipTo?.trim() ? `<p class="client-secondary"><strong>${escapeHtml(invoice.labels.shipTo)}:</strong> ${nl2br(invoice.client.shipTo)}</p>` : ""}
+    </div>
+
     <!-- Line items table -->
     <table class="items-table">
       <thead>
@@ -689,114 +589,75 @@ export function generateInvoiceHtml(invoice: InvoiceData): string {
         </tr>
       </thead>
       <tbody>
-        ${invoice.items
-          .map((item) => {
-            const qty = parseFloat(item.quantity) || 0;
-            const rate = parseFloat(item.rate) || 0;
-            const amount = qty * rate;
-            return `
-            <tr>
-              <td>
-                <div class="item-name">${escapeHtml(item.name)}</div>
-                ${item.description ? `<div class="item-description">${escapeHtml(item.description)}</div>` : ""}
-              </td>
-              <td>${escapeHtml(item.quantity)}</td>
-              <td>${formatCurrency(rate, currency)}</td>
-              <td class="text-right">${formatCurrency(amount, currency)}</td>
-            </tr>
-          `;
-          })
-          .join("")}
+        ${invoice.items.map((item) => {
+          const qty = parseFloat(item.quantity) || 0;
+          const rate = parseFloat(item.rate) || 0;
+          const amount = qty * rate;
+          return `
+        <tr>
+          <td>
+            <div class="item-name">${escapeHtml(item.name)}</div>
+            ${item.description ? `<div class="item-description">${escapeHtml(item.description)}</div>` : ""}
+          </td>
+          <td>${escapeHtml(item.quantity)}</td>
+          <td>${formatCurrency(rate, currency)}</td>
+          <td>${formatCurrency(amount, currency)}</td>
+        </tr>`;
+        }).join("")}
       </tbody>
     </table>
-    
+
     <!-- Totals -->
-    <div class="totals-container">
-      <div class="totals-section">
-        <div class="totals-row">
-          <span>${escapeHtml(invoice.labels.subtotal)}</span>
-          <span>${formatCurrency(totals.subtotal, currency)}</span>
-        </div>
-        ${
-          invoice.totals.taxEnabled
-            ? `
-          <div class="totals-row">
-            <span>${escapeHtml(invoice.labels.tax)} ${invoice.totals.taxType === "percent" ? `(${invoice.totals.taxValue}%)` : ""}</span>
-            <span>${formatCurrency(totals.tax, currency)}</span>
-          </div>
-        `
-            : ""
-        }
-        ${
-          invoice.totals.discountEnabled
-            ? `
-          <div class="totals-row">
-            <span>${escapeHtml(invoice.labels.discount)} ${invoice.totals.discountType === "percent" ? `(${invoice.totals.discountValue}%)` : ""}</span>
-            <span>-${formatCurrency(totals.discount, currency)}</span>
-          </div>
-        `
-            : ""
-        }
-        ${
-          invoice.totals.shippingEnabled
-            ? `
-          <div class="totals-row">
-            <span>${escapeHtml(invoice.labels.shipping)}</span>
-            <span>${formatCurrency(totals.shipping, currency)}</span>
-          </div>
-        `
-            : ""
-        }
-        <div class="totals-row total">
-          <span>${escapeHtml(invoice.labels.total)}</span>
-          <span>${formatCurrency(totals.total, currency)}</span>
-        </div>
-        ${
-          totals.amountPaid > 0
-            ? `
-          <div class="totals-row">
-            <span>${escapeHtml(invoice.labels.amountPaid)}</span>
-            <span>-${formatCurrency(totals.amountPaid, currency)}</span>
-          </div>
-          <div class="totals-row amount-due">
-            <span>${escapeHtml(invoice.labels.amountDue)}</span>
-            <span>${formatCurrency(totals.amountDue, currency)}</span>
-          </div>
-        `
-            : ""
-        }
-      </div>
+    <div class="totals-wrapper">
+      <table class="totals-table">
+        <tr>
+          <td class="totals-label">${escapeHtml(invoice.labels.subtotal)}:</td>
+          <td class="totals-value">${formatCurrency(totals.subtotal, currency)}</td>
+        </tr>
+        ${invoice.totals.taxEnabled ? `
+        <tr>
+          <td class="totals-label">${escapeHtml(invoice.labels.tax)}${invoice.totals.taxType === "percent" ? ` (${invoice.totals.taxValue}%)` : ""}:</td>
+          <td class="totals-value">${formatCurrency(totals.tax, currency)}</td>
+        </tr>` : ""}
+        ${invoice.totals.discountEnabled ? `
+        <tr>
+          <td class="totals-label">${escapeHtml(invoice.labels.discount)}${invoice.totals.discountType === "percent" ? ` (${invoice.totals.discountValue}%)` : ""}:</td>
+          <td class="totals-value">-${formatCurrency(totals.discount, currency)}</td>
+        </tr>` : ""}
+        ${invoice.totals.shippingEnabled ? `
+        <tr>
+          <td class="totals-label">${escapeHtml(invoice.labels.shipping)}:</td>
+          <td class="totals-value">${formatCurrency(totals.shipping, currency)}</td>
+        </tr>` : ""}
+        <tr class="total-row">
+          <td class="totals-label">${escapeHtml(invoice.labels.total)}:</td>
+          <td class="totals-value">${formatCurrency(totals.total, currency)}</td>
+        </tr>
+        ${totals.amountPaid > 0 ? `
+        <tr>
+          <td class="totals-label">${escapeHtml(invoice.labels.amountPaid)}:</td>
+          <td class="totals-value">-${formatCurrency(totals.amountPaid, currency)}</td>
+        </tr>
+        <tr class="amount-due-row">
+          <td class="totals-label">${escapeHtml(invoice.labels.amountDue)}:</td>
+          <td class="totals-value">${formatCurrency(totals.amountDue, currency)}</td>
+        </tr>` : ""}
+      </table>
     </div>
-    
-    <!-- Notes and Terms -->
-    ${
-      invoice.notes || invoice.terms
-        ? `
-      <div class="footer-grid">
-        ${
-          invoice.notes
-            ? `
-          <div class="notes-section">
-            <p class="label">${escapeHtml(invoice.labels.notes)}</p>
-            <p class="content">${nl2br(invoice.notes)}</p>
-          </div>
-        `
-            : ""
-        }
-        ${
-          invoice.terms
-            ? `
-          <div class="terms-section">
-            <p class="label">${escapeHtml(invoice.labels.terms)}</p>
-            <p class="content">${nl2br(invoice.terms)}</p>
-          </div>
-        `
-            : ""
-        }
-      </div>
-    `
-        : ""
-    }
+
+    <!-- Notes -->
+    ${hasNotes ? `
+    <div class="notes-section">
+      <p class="section-label">${escapeHtml(invoice.labels.notes)}:</p>
+      <p class="section-content">${nl2br(invoice.notes)}</p>
+    </div>` : ""}
+
+    <!-- Terms -->
+    ${hasTerms ? `
+    <div class="terms-section">
+      <p class="section-label">${escapeHtml(invoice.labels.terms)}:</p>
+      <p class="section-content">${nl2br(invoice.terms)}</p>
+    </div>` : ""}
   </div>
 </body>
 </html>`;

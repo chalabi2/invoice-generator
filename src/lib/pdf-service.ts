@@ -1,11 +1,4 @@
-import { generateInvoiceHtml, type InvoiceData } from "./invoice-html-template";
-
-/** Response from the PDF generation API */
-interface PdfGenerationResponse {
-  success: boolean;
-  blob?: Blob;
-  error?: string;
-}
+import type { InvoiceData } from "./invoice-html-template";
 
 /** Options for PDF generation */
 interface PdfExportOptions {
@@ -13,86 +6,28 @@ interface PdfExportOptions {
   onProgress?: (status: string) => void;
 }
 
-/**
- * Generate a PDF using the server-side rendering API.
- * Falls back to client-side generation if the server is unavailable.
- */
-export async function generatePdf(
-  invoice: InvoiceData,
-  options: PdfExportOptions = {}
-): Promise<PdfGenerationResponse> {
-  const { filename = `invoice-${invoice.meta.invoiceNumber || invoice.id}.pdf`, onProgress } = options;
-
-  onProgress?.("Generating PDF...");
-
-  try {
-    // Generate the HTML template
-    const html = generateInvoiceHtml(invoice);
-
-    // Call the server-side PDF generation API
-    const response = await fetch("/api/generate-pdf", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ html, filename }),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
-      throw new Error(errorData.error || `Server error: ${response.status}`);
-    }
-
-    const blob = await response.blob();
-    onProgress?.("PDF generated successfully");
-
-    return { success: true, blob };
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : "Failed to generate PDF";
-    console.error("PDF generation error:", error);
-    return { success: false, error: errorMessage };
-  }
+/** Result of a PDF export operation */
+interface PdfExportResult {
+  success: boolean;
+  error?: string;
 }
 
 /**
- * Generate and download a PDF for the given invoice.
- * Handles the full flow from generation to browser download.
+ * Render the hidden invoice DOM element to a canvas via html2canvas,
+ * then produce a single-page PDF whose dimensions exactly match the
+ * rendered content — no page breaks, no overflow, just one long page.
  */
-export async function downloadPdf(
-  invoice: InvoiceData,
-  options: PdfExportOptions = {}
-): Promise<{ success: boolean; error?: string }> {
-  const { filename = `invoice-${invoice.meta.invoiceNumber || invoice.id}.pdf` } = options;
-
-  const result = await generatePdf(invoice, options);
-
-  if (!result.success || !result.blob) {
-    return { success: false, error: result.error };
-  }
-
-  // Trigger browser download
-  const url = URL.createObjectURL(result.blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
-
-  return { success: true };
-}
-
-/**
- * Client-side PDF generation fallback using html2canvas and jsPDF.
- * This is used when the server-side API is unavailable.
- */
-export async function generatePdfClientSide(
+export async function exportInvoiceToPdf(
+  _invoice: InvoiceData,
   elementId: string,
-  filename: string = "invoice.pdf"
-): Promise<{ success: boolean; error?: string }> {
+  options: PdfExportOptions = {}
+): Promise<PdfExportResult> {
+  const { filename = "invoice.pdf", onProgress } = options;
+
+  onProgress?.("Rendering invoice...");
+
   try {
-    // Dynamic imports to avoid bundling these in the main chunk
+    /* Dynamically import heavy libraries so they stay out of the main bundle */
     const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
       import("html2canvas"),
       import("jspdf"),
@@ -103,6 +38,9 @@ export async function generatePdfClientSide(
       return { success: false, error: "Invoice element not found" };
     }
 
+    onProgress?.("Capturing content...");
+
+    /* Render the element at 2× resolution for crisp text */
     const canvas = await html2canvas(element, {
       scale: 2,
       useCORS: true,
@@ -110,63 +48,44 @@ export async function generatePdfClientSide(
       logging: false,
     });
 
-    const imgData = canvas.toDataURL("image/png");
-    const pdf = new jsPDF({
-      orientation: "portrait",
-      unit: "pt",
-      format: "letter",
-    });
+    onProgress?.("Building PDF...");
 
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const imgWidth = canvas.width;
-    const imgHeight = canvas.height;
-    const renderWidth = pageWidth;
-    const renderHeight = (imgHeight * renderWidth) / imgWidth;
+    /*
+     * Scale the canvas so the PDF width equals US-letter width (612 pt = 8.5 in).
+     * Height is derived proportionally so nothing is clipped or paginated.
+     */
+    const pdfWidthPt = 612;
+    const pdfHeightPt = (canvas.height / canvas.width) * pdfWidthPt;
 
-    let position = 0;
-    let page = 0;
-    while (position < renderHeight) {
-      if (page > 0) {
-        pdf.addPage();
-      }
-      pdf.addImage(imgData, "PNG", 0, -position, renderWidth, renderHeight);
-      position += pageHeight;
-      page += 1;
+    /*
+     * Create a jsPDF instance using the positional constructor overload.
+     * This avoids the orientation-based dimension swapping that happens
+     * when using the options-object constructor with a format array.
+     * The 'p' (portrait) orientation + explicit [w, h] where h >= w
+     * guarantees the page is created at exactly the size we need.
+     */
+    const pdf = new jsPDF("p", "pt", [pdfWidthPt, pdfHeightPt]);
+
+    /* Use JPEG encoding — much smaller data URL than PNG */
+    const imgData = canvas.toDataURL("image/jpeg", 0.95);
+    pdf.addImage(imgData, "JPEG", 0, 0, pdfWidthPt, pdfHeightPt);
+
+    /*
+     * Safety: ensure the document has exactly one page.
+     * jsPDF shouldn't add extras, but this guards against edge cases.
+     */
+    while (pdf.getNumberOfPages() > 1) {
+      pdf.deletePage(pdf.getNumberOfPages());
     }
 
     pdf.save(filename);
+
+    onProgress?.("PDF saved");
     return { success: true };
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : "Failed to generate PDF";
-    console.error("Client-side PDF generation error:", error);
-    return { success: false, error: errorMessage };
+    const message =
+      error instanceof Error ? error.message : "Failed to generate PDF";
+    console.error("PDF generation error:", error);
+    return { success: false, error: message };
   }
-}
-
-/**
- * Export invoice to PDF with automatic fallback.
- * Tries server-side first, falls back to client-side if unavailable.
- */
-export async function exportInvoiceToPdf(
-  invoice: InvoiceData,
-  fallbackElementId: string,
-  options: PdfExportOptions = {}
-): Promise<{ success: boolean; error?: string; method: "server" | "client" }> {
-  const filename = options.filename || `invoice-${invoice.meta.invoiceNumber || invoice.id}.pdf`;
-
-  // Try server-side generation first
-  options.onProgress?.("Generating PDF via server...");
-  const serverResult = await downloadPdf(invoice, { ...options, filename });
-
-  if (serverResult.success) {
-    return { success: true, method: "server" };
-  }
-
-  // Fall back to client-side generation
-  console.warn("Server-side PDF generation failed, falling back to client-side:", serverResult.error);
-  options.onProgress?.("Falling back to client-side generation...");
-  
-  const clientResult = await generatePdfClientSide(fallbackElementId, filename);
-  return { ...clientResult, method: "client" };
 }

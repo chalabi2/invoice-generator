@@ -1,0 +1,114 @@
+InvoiceGenerator Source-Available License (IG-SAL) v1.0
+
+Copyright (c) 2026 Joseph Chalabi
+
+NOTICE
+This license is "source-available" and is NOT an OSI-approved open source license.
+It allows public access to the source code and broad use of the Licensor-operated hosted service,
+but it requires a paid license for Commercial Self-Hosting (defined below).
+
+1. DEFINITIONS
+
+"Licensor" means Joseph Chalabi.
+
+"Software" means the software and associated source code, documentation, build scripts,
+configuration files, and other materials made available in the repository titled
+"invoicegenerator.com" (the "Project"), including any modifications or derivative works
+you create from it, to the extent those modifications or derivative works are based on the Software.
+
+"Hosted Service" means the publicly available, Licensor-operated hosted invoice generator service
+made available by Licensor (for example, a service operated by Licensor under the Project brand).
+
+"Instance" means a single deployed runtime environment capable of serving invoice generation
+functionality to one or more users, regardless of whether it runs in a container, VM, bare metal,
+Kubernetes pod(s), or similar. A horizontally scaled deployment counts as one Instance if it is
+one logical installation serving the same tenant or organization and is operated as a single system.
+Separate tenants or separate installations are separate Instances.
+
+"Self-Host" or "Self-Hosting" means running or deploying the Software on infrastructure that you
+(or your organization) control, including your own servers, your own cloud account, or any hosting
+provider where you control the environment.
+
+"Commercial Purpose" means use that is primarily intended for or directed toward commercial advantage
+or monetary compensation. Commercial Purpose includes, without limitation:
+(a) using the Software in the operation of a business;
+(b) using the Software to provide services to customers or third parties;
+(c) offering the Software or its functionality as a hosted service, managed service, or SaaS;
+(d) internal business use in production, even if you do not charge end users directly.
+Commercial Purpose does NOT include bona fide personal use, hobby use, academic use, or
+non-profit use where no fees are charged for access to the Software or its functionality,
+and the use is not part of a for-profit business operation.
+
+"Non-Commercial Use" means any use that is not a Commercial Purpose.
+
+"Production Use" means use in a live environment supporting real users, real data, or real business
+processes, excluding reasonable evaluation, testing, or development.
+
+2. GRANT OF RIGHTS
+
+Subject to the terms of this License, Licensor grants you a non-exclusive, worldwide, royalty-free
+license to:
+(a) view, download, and modify the Software for Non-Commercial Use;
+(b) Self-Host the Software for Non-Commercial Use;
+(c) use the Hosted Service at no charge, provided you comply with any reasonable usage limits,
+abuse prevention measures, and terms presented within the Hosted Service (the "Hosted Terms");
+(d) redistribute the Software (source or binary) ONLY for Non-Commercial Use and ONLY if you
+include this License and all copyright notices.
+
+3. COMMERCIAL SELF-HOSTING REQUIRES A PAID LICENSE
+
+If you Self-Host the Software for any Commercial Purpose, you must purchase a commercial license
+from Licensor for each Instance.
+
+Without a commercial license, you may NOT:
+(a) Self-Host the Software for Production Use in a for-profit business;
+(b) provide the Software or its functionality to others as a service (SaaS/hosted/managed service);
+(c) resell, license, or otherwise monetize a Self-Hosted deployment;
+(d) remove or obscure licensing, copyright, or attribution notices.
+
+4. CONTRIBUTIONS
+
+If you submit contributions (code, documentation, issues, or pull requests), you grant Licensor
+a perpetual, worldwide, irrevocable, royalty-free license to use, reproduce, modify, relicense,
+and distribute your contributions as part of the Software under this License and/or under separate
+commercial terms. You represent that you have the right to make the contribution.
+
+5. TRADEMARKS AND BRANDING
+
+This License does not grant any rights to use Licensor’s trademarks, service marks, or logos.
+You may make truthful statements that your product or service uses the Software, but you may not
+suggest endorsement by Licensor.
+
+6. LICENSE TERMINATION
+
+This License terminates automatically if you violate its terms. Upon termination, you must cease
+all use and distribution of the Software, except that any recipients who received the Software from
+you in compliance with this License may retain their rights under this License.
+
+7. DISCLAIMER OF WARRANTY
+
+THE SOFTWARE AND HOSTED SERVICE ARE PROVIDED "AS IS" AND "AS AVAILABLE", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE, AND NON-INFRINGEMENT. YOU BEAR ALL RISK OF USING THE SOFTWARE OR HOSTED SERVICE.
+
+8. LIMITATION OF LIABILITY
+
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, IN NO EVENT WILL LICENSOR BE LIABLE FOR ANY INDIRECT,
+INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF PROFITS, REVENUE, DATA,
+OR BUSINESS INTERRUPTION, ARISING OUT OF OR RELATED TO THIS LICENSE, THE SOFTWARE, OR THE HOSTED
+SERVICE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES. LICENSOR’S TOTAL LIABILITY FOR ANY
+CLAIM ARISING OUT OF OR RELATED TO THIS LICENSE SHALL NOT EXCEED ONE HUNDRED U.S. DOLLARS (USD $100).
+
+9. GOVERNING LAW
+
+This License is governed by the laws of the State of Arizona, United States of America, without
+regard to conflict of laws principles.
+
+10. COMMERCIAL LICENSING CONTACT
+
+To obtain a Commercial Self-Hosting license (per Instance), contact:
+Licensing: licensing@invoicegenerator.com
+
+END OF TERMS
+
+## Licensing

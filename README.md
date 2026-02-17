@@ -5,19 +5,19 @@
 Install dependencies:
 
 ```bash
-npm install
+bun install
 ```
 
 Run the dev server:
 
 ```bash
-npm run dev
+bun run dev
 ```
 
 ## Build
 
 ```bash
-npm run build
+bun run build
 ```
 
 ## Cloudflare Pages
@@ -25,6 +25,17 @@ npm run build
 Build output: `dist`
 
 ```bash
-npm run build
-npx wrangler pages deploy dist --project-name invoicegenerator-xyz
+bun run build
+PROJECT_NAME=<project-name> bun run deploy
 ```
+
+## Licensing
+
+This project is **source-available**.
+
+- **Free forever (hosted):** Businesses and individuals may use the Licensor-operated hosted InvoiceGenerator service at no charge.
+- **Self-hosting:** If you want to run InvoiceGenerator on your own infrastructure:
+  - **Non-commercial self-hosting** is allowed under the LICENSE in this repo.
+  - **Commercial self-hosting (production business use)** requires a **paid per-instance license** (see COMMERCIAL_LICENSE.md).
+
+If you need a commercial license for self-hosting, contact: contact@jchalabi.xyz
