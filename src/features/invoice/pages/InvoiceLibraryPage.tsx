@@ -307,7 +307,13 @@ export function InvoiceLibraryPage() {
                   })}
                   <Button
                     variant="secondary"
-                    onClick={addInvoice}
+                    onClick={() =>
+                      addInvoice(
+                        selectedFolderId !== "all" && selectedFolderId !== "unfiled"
+                          ? selectedFolderId
+                          : null
+                      )
+                    }
                     className="w-full"
                   >
                     New invoice

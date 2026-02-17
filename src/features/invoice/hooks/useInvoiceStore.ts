@@ -102,14 +102,14 @@ export const useInvoiceStore = () => {
     setStore((current) => ({ ...current, activeInvoiceId: id }));
   };
 
-  const addInvoice = () => {
+  const addInvoice = (folderId?: string | null) => {
     const fresh = createEmptyInvoice();
     const stored = {
       id: fresh.id,
       clientName: fresh.client.name,
       invoiceNumber: fresh.meta.invoiceNumber,
       updatedAt: fresh.updatedAt,
-      folderId: null,
+      folderId: folderId ?? null,
       data: fresh,
     };
     setStore((current) => ({

@@ -40,11 +40,11 @@ export async function exportInvoiceToPdf(
 
     onProgress?.("Capturing content...");
 
-    /* Render the element at higher resolution for crisp text/logos */
+    /* Render at a balanced resolution (quality vs file size) */
     const pixelRatio =
       typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
     const canvas = await html2canvas(element, {
-      scale: Math.max(3, pixelRatio * 2),
+      scale: Math.min(2.4, Math.max(2, pixelRatio)),
       useCORS: true,
       backgroundColor: null,
       logging: false,
@@ -68,9 +68,9 @@ export async function exportInvoiceToPdf(
      */
     const pdf = new jsPDF("p", "pt", [pdfWidthPt, pdfHeightPt]);
 
-    /* Use PNG to avoid JPEG artifacts on logos/text */
-    const imgData = canvas.toDataURL("image/png");
-    pdf.addImage(imgData, "PNG", 0, 0, pdfWidthPt, pdfHeightPt);
+    /* JPEG with tuned quality gives much smaller files with good clarity */
+    const imgData = canvas.toDataURL("image/jpeg", 0.86);
+    pdf.addImage(imgData, "JPEG", 0, 0, pdfWidthPt, pdfHeightPt, undefined, "MEDIUM");
 
     /*
      * Safety: ensure the document has exactly one page.

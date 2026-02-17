@@ -1,6 +1,6 @@
 import * as React from "react";
 import { nanoid } from "nanoid";
-import { Upload } from "lucide-react";
+import { Trash2, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -277,7 +277,15 @@ export const InvoicePreview = ({
           )}
 
           <div className="mt-5 space-y-1.5">
-            <div className="grid grid-cols-[96px_minmax(0,1fr)] items-center gap-2 text-sm" style={{ color: palette.muted }}>
+            <div
+              className={cn(
+                "grid items-center gap-2 text-sm",
+                canEdit
+                  ? "grid-cols-[96px_minmax(0,1fr)]"
+                  : "grid-cols-[max-content_minmax(0,1fr)]"
+              )}
+              style={{ color: palette.muted }}
+            >
               <InlineEditableText
                 value={invoice.labels.billTo}
                 onChange={labelUpdater("billTo")}
@@ -294,11 +302,22 @@ export const InvoicePreview = ({
                         }))
                     : undefined
                 }
-                className="max-w-[22rem] font-bold text-[hsl(var(--foreground))]"
+                className={cn(
+                  "max-w-[22rem]",
+                  !canEdit && "font-bold text-[hsl(var(--foreground))]"
+                )}
               />
             </div>
             {(invoice.client.attnTo?.trim() || canEdit) && (
-              <div className="grid grid-cols-[74px_minmax(0,1fr)] items-center gap-1.5 text-sm" style={{ color: palette.muted }}>
+              <div
+                className={cn(
+                  "grid items-center gap-2 text-sm",
+                  canEdit
+                    ? "grid-cols-[96px_minmax(0,1fr)]"
+                    : "grid-cols-[max-content_minmax(0,1fr)]"
+                )}
+                style={{ color: palette.muted }}
+              >
                 <InlineEditableText
                   value={invoice.labels.attnTo}
                   onChange={labelUpdater("attnTo")}
@@ -315,7 +334,7 @@ export const InvoicePreview = ({
                           }))
                     : undefined
                   }
-                  className="max-w-[22rem] font-semibold"
+                  className={cn("max-w-[22rem]", !canEdit && "font-semibold")}
                 />
               </div>
             )}
@@ -357,7 +376,15 @@ export const InvoicePreview = ({
               </p>
             )}
             {(invoice.client.shipTo?.trim() || canEdit) && (
-              <div className="grid grid-cols-[74px_minmax(0,1fr)] items-center gap-1.5 text-sm" style={{ color: palette.muted }}>
+              <div
+                className={cn(
+                  "grid items-center gap-2 text-sm",
+                  canEdit
+                    ? "grid-cols-[96px_minmax(0,1fr)]"
+                    : "grid-cols-[max-content_minmax(0,1fr)]"
+                )}
+                style={{ color: palette.muted }}
+              >
                 <InlineEditableText
                   value={invoice.labels.shipTo}
                   onChange={labelUpdater("shipTo")}
@@ -374,7 +401,7 @@ export const InvoicePreview = ({
                           }))
                     : undefined
                   }
-                  className="max-w-[22rem] font-semibold"
+                  className={cn("max-w-[22rem]", !canEdit && "font-semibold")}
                 />
               </div>
             )}
@@ -549,7 +576,25 @@ export const InvoicePreview = ({
                   onChange={canEdit ? (value) => onUpdate?.((d) => ({ ...d, items: d.items.map((e) => (e.id === item.id ? { ...e, rate: value } : e)) })) : undefined}
                 />
               </p>
-              <p className="text-right">{formatCurrency(amount, currency)}</p>
+              <div className="flex h-full flex-col items-end justify-between">
+                <p className="text-right">{formatCurrency(amount, currency)}</p>
+                {canEdit ? (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() =>
+                      onUpdate?.((d) => ({
+                        ...d,
+                        items: d.items.filter((e) => e.id !== item.id),
+                      }))
+                    }
+                    aria-label="Delete line item"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                ) : null}
+              </div>
             </div>
           );
         })}
